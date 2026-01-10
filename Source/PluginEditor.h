@@ -149,9 +149,29 @@ private:
     juce::TextButton vintageButton { "VINTAGE" };
     juce::TextButton modernButton  { "MODERN" };
 
+    juce::ComboBox presetCombo;
     juce::ToggleButton tooltipToggle { "HINTS" };
     std::unique_ptr<juce::TooltipWindow> tooltipWindow;
     
+    struct Preset
+    {
+        juce::String name;
+        juce::String category;
+        float decay;    // s
+        float preDelay; // ms
+        float size;     // %
+        float mix;      // %
+        float width;    // %
+        float highCut;  // Hz
+        float lowCut;   // Hz
+        float ducking;  // %
+        int character;  // 0=Plate, 1=Vintage, 2=Modern
+    };
+
+    std::vector<Preset> presets;
+    void loadPreset(int index);
+    void initPresets();
+
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> decayAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> preDelayAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> sizeAttachment;

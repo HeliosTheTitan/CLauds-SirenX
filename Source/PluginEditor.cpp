@@ -518,12 +518,138 @@ SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
     // Removing it for safety to fix build.
     // duckingMeter.setTooltip("Gain Reduction Amount");
 
+    // Presets
+    initPresets();
+    presetCombo.setTextWhenNothingSelected("Select Preset");
+    presetCombo.setJustificationType(juce::Justification::centredLeft);
+
+    // Style the combo box
+    presetCombo.setColour(juce::ComboBox::backgroundColourId, SirenXColors::backgroundDark);
+    presetCombo.setColour(juce::ComboBox::outlineColourId, SirenXColors::metalBlue);
+    presetCombo.setColour(juce::ComboBox::textColourId, SirenXColors::textBright);
+    presetCombo.setColour(juce::ComboBox::arrowColourId, SirenXColors::accentBright);
+
+    juce::String currentCategory;
+    int id = 1;
+    for (const auto& preset : presets)
+    {
+        if (preset.category != currentCategory)
+        {
+            currentCategory = preset.category;
+            presetCombo.addSectionHeading(currentCategory);
+        }
+        presetCombo.addItem(preset.name, id++);
+    }
+
+    presetCombo.onChange = [this] { loadPreset(presetCombo.getSelectedId() - 1); };
+    addAndMakeVisible(presetCombo);
+
     // Initialize character button states
     updateCharacterButtons();
+
+    // Force update labels to ensure defaults are displayed
+    decayKnob.forceUpdateLabel();
+    preDelayKnob.forceUpdateLabel();
+    sizeKnob.forceUpdateLabel();
+    mixKnob.forceUpdateLabel();
+    widthKnob.forceUpdateLabel();
+    highPassKnob.forceUpdateLabel();
+    lowPassKnob.forceUpdateLabel();
+    duckingKnob.forceUpdateLabel();
 
     setSize(750, 560); // Slightly taller to fit buttons
 
     startTimerHz(24); // Faster timer for smoother meter
+}
+
+void SirenXAudioProcessorEditor::initPresets()
+{
+    // Small Spaces
+    presets.push_back({ "Vocal Booth", "Small", 0.4f, 0.0f, 15.0f, 30.0f, 80.0f, 16000.0f, 80.0f, 0.0f, 2 });
+    presets.push_back({ "Drum Room", "Small", 0.6f, 10.0f, 25.0f, 40.0f, 100.0f, 14000.0f, 40.0f, 0.0f, 2 });
+    presets.push_back({ "Small Studio", "Small", 0.8f, 15.0f, 30.0f, 35.0f, 100.0f, 12000.0f, 50.0f, 0.0f, 2 });
+    presets.push_back({ "Tiled Room", "Small", 0.5f, 5.0f, 20.0f, 25.0f, 90.0f, 18000.0f, 100.0f, 0.0f, 0 });
+    presets.push_back({ "Percussion Box", "Small", 0.3f, 0.0f, 10.0f, 45.0f, 70.0f, 15000.0f, 150.0f, 0.0f, 2 });
+    presets.push_back({ "Closet", "Small", 0.2f, 0.0f, 5.0f, 20.0f, 50.0f, 8000.0f, 200.0f, 0.0f, 1 });
+    presets.push_back({ "Bright Chamber", "Small", 0.9f, 20.0f, 35.0f, 30.0f, 110.0f, 16000.0f, 60.0f, 0.0f, 0 });
+    presets.push_back({ "Snare Plate", "Small", 1.2f, 0.0f, 40.0f, 35.0f, 100.0f, 15000.0f, 120.0f, 0.0f, 0 });
+    presets.push_back({ "Guitar Room", "Small", 0.7f, 12.0f, 28.0f, 25.0f, 95.0f, 10000.0f, 80.0f, 0.0f, 1 });
+    presets.push_back({ "Ambience", "Small", 0.5f, 30.0f, 40.0f, 20.0f, 120.0f, 13000.0f, 100.0f, 0.0f, 2 });
+
+    // Medium Spaces
+    presets.push_back({ "Medium Hall", "Medium", 1.8f, 25.0f, 50.0f, 40.0f, 100.0f, 10000.0f, 60.0f, 0.0f, 2 });
+    presets.push_back({ "Vintage Plate", "Medium", 2.0f, 10.0f, 55.0f, 35.0f, 100.0f, 14000.0f, 150.0f, 0.0f, 0 });
+    presets.push_back({ "Large Studio", "Medium", 1.5f, 20.0f, 45.0f, 30.0f, 100.0f, 12000.0f, 50.0f, 0.0f, 2 });
+    presets.push_back({ "Club", "Medium", 1.4f, 15.0f, 40.0f, 35.0f, 90.0f, 8000.0f, 100.0f, 10.0f, 1 });
+    presets.push_back({ "Garage", "Medium", 1.2f, 5.0f, 35.0f, 25.0f, 110.0f, 15000.0f, 80.0f, 0.0f, 2 });
+    presets.push_back({ "Stage", "Medium", 2.2f, 35.0f, 60.0f, 40.0f, 120.0f, 11000.0f, 70.0f, 0.0f, 2 });
+    presets.push_back({ "Stone Room", "Medium", 1.6f, 18.0f, 48.0f, 30.0f, 100.0f, 16000.0f, 90.0f, 0.0f, 2 });
+    presets.push_back({ "Warm Hall", "Medium", 2.4f, 40.0f, 65.0f, 45.0f, 100.0f, 7000.0f, 120.0f, 0.0f, 1 });
+    presets.push_back({ "Bright Plate", "Medium", 1.9f, 0.0f, 50.0f, 40.0f, 100.0f, 18000.0f, 200.0f, 0.0f, 0 });
+    presets.push_back({ "Recital Room", "Medium", 1.7f, 22.0f, 55.0f, 35.0f, 110.0f, 13000.0f, 60.0f, 0.0f, 2 });
+
+    // Large Spaces
+    presets.push_back({ "Concert Hall", "Large", 3.5f, 45.0f, 80.0f, 50.0f, 120.0f, 9000.0f, 40.0f, 0.0f, 2 });
+    presets.push_back({ "Cathedral", "Large", 5.0f, 60.0f, 95.0f, 45.0f, 130.0f, 6000.0f, 30.0f, 0.0f, 1 });
+    presets.push_back({ "Large Church", "Large", 4.2f, 50.0f, 85.0f, 40.0f, 115.0f, 8000.0f, 50.0f, 0.0f, 1 });
+    presets.push_back({ "Arena", "Large", 6.0f, 80.0f, 100.0f, 55.0f, 140.0f, 7000.0f, 40.0f, 20.0f, 2 });
+    presets.push_back({ "Cave", "Large", 4.5f, 30.0f, 90.0f, 50.0f, 100.0f, 5000.0f, 100.0f, 0.0f, 1 });
+    presets.push_back({ "Warehouse", "Large", 3.0f, 25.0f, 75.0f, 35.0f, 110.0f, 10000.0f, 60.0f, 0.0f, 2 });
+    presets.push_back({ "Stadium", "Large", 5.5f, 100.0f, 100.0f, 45.0f, 150.0f, 8500.0f, 40.0f, 15.0f, 2 });
+    presets.push_back({ "Grand Hall", "Large", 3.8f, 55.0f, 82.0f, 50.0f, 120.0f, 9500.0f, 45.0f, 0.0f, 2 });
+    presets.push_back({ "Big Plate", "Large", 3.2f, 15.0f, 70.0f, 40.0f, 110.0f, 12000.0f, 100.0f, 0.0f, 0 });
+    presets.push_back({ "Canyon", "Large", 4.8f, 120.0f, 95.0f, 40.0f, 160.0f, 11000.0f, 80.0f, 0.0f, 2 });
+
+    // Extreme Spaces
+    presets.push_back({ "Infinite Void", "Extreme", 9.5f, 50.0f, 100.0f, 100.0f, 180.0f, 15000.0f, 20.0f, 0.0f, 2 });
+    presets.push_back({ "Deep Space", "Extreme", 10.0f, 200.0f, 100.0f, 60.0f, 200.0f, 4000.0f, 20.0f, 30.0f, 2 });
+    presets.push_back({ "Alien Texture", "Extreme", 8.0f, 10.0f, 90.0f, 80.0f, 150.0f, 20000.0f, 500.0f, 50.0f, 0 });
+    presets.push_back({ "Frozen", "Extreme", 9.0f, 0.0f, 100.0f, 70.0f, 100.0f, 20000.0f, 20.0f, 0.0f, 0 });
+    presets.push_back({ "Underwater", "Extreme", 4.0f, 40.0f, 80.0f, 100.0f, 80.0f, 1000.0f, 20.0f, 0.0f, 1 });
+    presets.push_back({ "Ducking Wash", "Extreme", 5.0f, 20.0f, 90.0f, 100.0f, 140.0f, 12000.0f, 50.0f, 80.0f, 2 });
+    presets.push_back({ "Reverse Gated", "Extreme", 0.5f, 0.0f, 60.0f, 100.0f, 100.0f, 10000.0f, 100.0f, 90.0f, 0 });
+    presets.push_back({ "Metallic Drone", "Extreme", 7.0f, 5.0f, 95.0f, 50.0f, 50.0f, 18000.0f, 300.0f, 0.0f, 0 });
+    presets.push_back({ "Ethereal Shimmer", "Extreme", 8.5f, 100.0f, 100.0f, 60.0f, 160.0f, 16000.0f, 150.0f, 0.0f, 0 });
+    presets.push_back({ "Black Hole", "Extreme", 10.0f, 500.0f, 100.0f, 100.0f, 200.0f, 3000.0f, 20.0f, 0.0f, 1 });
+}
+
+void SirenXAudioProcessorEditor::loadPreset(int index)
+{
+    if (index >= 0 && index < static_cast<int>(presets.size()))
+    {
+        const auto& p = presets[static_cast<size_t>(index)];
+
+        auto& apvts = audioProcessor.getAPVTS();
+
+        // Parameter changes must be done on the message thread or via parameter attachment mechanisms
+        // Since we are on the message thread (UI), we can set parameters directly but better to use the attachments?
+        // Attachments update the parameter when the slider moves.
+        // If we move the slider, the attachment updates the parameter.
+
+        decayKnob.getSlider().setValue(p.decay, juce::sendNotificationSync);
+        preDelayKnob.getSlider().setValue(p.preDelay, juce::sendNotificationSync);
+        sizeKnob.getSlider().setValue(p.size, juce::sendNotificationSync);
+        mixKnob.getSlider().setValue(p.mix, juce::sendNotificationSync);
+        widthKnob.getSlider().setValue(p.width, juce::sendNotificationSync);
+        highPassKnob.getSlider().setValue(p.lowCut, juce::sendNotificationSync); // Label is High Pass, param is lowCut
+        lowPassKnob.getSlider().setValue(p.highCut, juce::sendNotificationSync); // Label is Low Pass, param is highCut
+        duckingKnob.getSlider().setValue(p.ducking, juce::sendNotificationSync);
+
+        // Character buttons are handled by UI update, but we need to set the param
+        if (auto* param = apvts.getParameter("character"))
+        {
+            float normVal = static_cast<float>(p.character) / 2.0f;
+            // We can't set parameter directly easily without normalization, but let's assume range 0-2 maps to 0.0-1.0
+            // Actually choice parameter: 0, 1, 2. Normalized: 0.0, 0.5, 1.0
+            param->setValueNotifyingHost(normVal);
+
+            // Also explicitly update the buttons
+            audioProcessor.setCharacter(static_cast<SirenXAudioProcessor::ReverbCharacter>(p.character));
+            updateCharacterButtons();
+        }
+
+        decayKnob.forceUpdateLabel(); // Update time based on character
+    }
 }
 
 SirenXAudioProcessorEditor::~SirenXAudioProcessorEditor()
@@ -893,6 +1019,10 @@ void SirenXAudioProcessorEditor::resized()
     auto headerBounds = bounds.removeFromTop(50);
 
     tooltipToggle.setBounds(headerBounds.removeFromLeft(120).withTrimmedLeft(35).reduced(0, 15).withWidth(80));
+
+    // Position Preset Combo in top right header
+    auto presetArea = headerBounds.removeFromRight(200).reduced(10, 12);
+    presetCombo.setBounds(presetArea);
 
     if (getWidth() > 0 && getHeight() > 0)
     {

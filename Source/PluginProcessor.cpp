@@ -59,7 +59,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout SirenXAudioProcessor::create
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{ "preDelay", 1 }, "Pre-Delay",
         juce::NormalisableRange<float>(0.0f, 500.0f, 1.0f, 0.5f),
-        0.0f,
+        35.0f, // Default to 35ms
         juce::AudioParameterFloatAttributes().withLabel("ms")));
 
     // Size (0% to 100%)
