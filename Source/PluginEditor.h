@@ -124,6 +124,7 @@ private:
     void drawFooter(juce::Graphics& g);
     void drawSideRails(juce::Graphics& g);
     void drawScrew(juce::Graphics& g, float x, float y, float size);
+    void drawNorthStar(juce::Graphics& g, float x, float y, float size);
     void updateCharacterButtons();
     
     SirenXAudioProcessor& audioProcessor;

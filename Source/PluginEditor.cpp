@@ -653,9 +653,91 @@ void SirenXAudioProcessorEditor::drawBackground(juce::Graphics& g)
         g.fillRect(x - 1.0f, verticalLineTop, 2.0f, verticalLineBottom - verticalLineTop);
     }
 
+    // Draw North Star at the intersection
+    drawNorthStar(g, controlsArea.getCentreX(), horizontalLineY, 24.0f);
+
     drawSideRails(g);
     drawHeader(g);
     drawFooter(g);
+}
+
+void SirenXAudioProcessorEditor::drawNorthStar(juce::Graphics& g, float x, float y, float size)
+{
+    // Soft yellow color palette
+    juce::Colour centerColor = juce::Colours::white;
+    juce::Colour coreColor = juce::Colour(0xFFFFFFA0); // Light yellow
+    juce::Colour rayColor = juce::Colour(0xFFFFD700);  // Gold
+    juce::Colour glowColor = juce::Colours::orange.withAlpha(0.3f);
+
+    // 1. Central Glow
+    {
+        juce::ColourGradient glowGrad(coreColor.withAlpha(0.6f), x, y,
+                                      glowColor.withAlpha(0.0f), x, y - size * 1.5f, true);
+        g.setGradientFill(glowGrad);
+        g.fillEllipse(x - size, y - size, size * 2.0f, size * 2.0f);
+    }
+
+    // 2. Main Rays (Cardinal)
+    // We draw them as long diamonds for 3D effect
+    auto drawRay = [&](float angle, float length, float width)
+    {
+        juce::Path ray;
+        ray.startNewSubPath(x, y);
+
+        // Create a diamond shape for the ray
+        // Project points based on angle
+        float tipX = x + std::cos(angle) * length;
+        float tipY = y + std::sin(angle) * length;
+
+        float perpAngle = angle + juce::MathConstants<float>::halfPi;
+        float sideX1 = x + std::cos(perpAngle) * width;
+        float sideY1 = y + std::sin(perpAngle) * width;
+        float sideX2 = x - std::cos(perpAngle) * width;
+        float sideY2 = y - std::sin(perpAngle) * width;
+
+        ray.startNewSubPath(sideX1, sideY1);
+        ray.lineTo(tipX, tipY);
+        ray.lineTo(sideX2, sideY2);
+        ray.lineTo(x, y); // Back to center (but center is covered by core)
+        ray.closeSubPath();
+
+        juce::ColourGradient rayGrad(centerColor, x, y,
+                                     rayColor.withAlpha(0.0f), tipX, tipY, false);
+        g.setGradientFill(rayGrad);
+        g.fillPath(ray);
+    };
+
+    float mainLen = size * 1.8f;
+    float mainWidth = size * 0.25f;
+
+    drawRay(0.0f, mainLen, mainWidth); // Right
+    drawRay(juce::MathConstants<float>::pi, mainLen, mainWidth); // Left
+    drawRay(juce::MathConstants<float>::halfPi, mainLen, mainWidth); // Down
+    drawRay(-juce::MathConstants<float>::halfPi, mainLen, mainWidth); // Up
+
+    // 3. Diagonal Rays
+    float diagLen = size * 0.9f;
+    float diagWidth = size * 0.15f;
+    float quarterPi = juce::MathConstants<float>::pi * 0.25f;
+
+    drawRay(quarterPi, diagLen, diagWidth);
+    drawRay(quarterPi * 3.0f, diagLen, diagWidth);
+    drawRay(quarterPi * 5.0f, diagLen, diagWidth);
+    drawRay(quarterPi * 7.0f, diagLen, diagWidth);
+
+    // 4. Central Core (3D Diamond/Gem)
+    float coreSize = size * 0.35f;
+    juce::Path core;
+    core.addStar(juce::Point<float>(x, y), 4, coreSize * 0.5f, coreSize);
+
+    juce::ColourGradient coreGrad(centerColor, x - coreSize * 0.2f, y - coreSize * 0.2f,
+                                  rayColor, x + coreSize * 0.2f, y + coreSize * 0.2f, true);
+    g.setGradientFill(coreGrad);
+    g.fillPath(core);
+
+    // Highlight on core
+    g.setColour(juce::Colours::white.withAlpha(0.8f));
+    g.fillEllipse(x - coreSize * 0.2f, y - coreSize * 0.2f, coreSize * 0.3f, coreSize * 0.3f);
 }
 
 void SirenXAudioProcessorEditor::drawHeader(juce::Graphics& g)
