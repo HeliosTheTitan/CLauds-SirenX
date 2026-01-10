@@ -565,52 +565,52 @@ SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
 void SirenXAudioProcessorEditor::initPresets()
 {
     // Small Spaces
-    presets.push_back({ "Vocal Booth", "Small", 0.4f, 0.0f, 15.0f, 30.0f, 80.0f, 16000.0f, 80.0f, 0.0f, 2 });
-    presets.push_back({ "Drum Room", "Small", 0.6f, 10.0f, 25.0f, 40.0f, 100.0f, 14000.0f, 40.0f, 0.0f, 2 });
-    presets.push_back({ "Small Studio", "Small", 0.8f, 15.0f, 30.0f, 35.0f, 100.0f, 12000.0f, 50.0f, 0.0f, 2 });
-    presets.push_back({ "Tiled Room", "Small", 0.5f, 5.0f, 20.0f, 25.0f, 90.0f, 18000.0f, 100.0f, 0.0f, 0 });
-    presets.push_back({ "Percussion Box", "Small", 0.3f, 0.0f, 10.0f, 45.0f, 70.0f, 15000.0f, 150.0f, 0.0f, 2 });
-    presets.push_back({ "Closet", "Small", 0.2f, 0.0f, 5.0f, 20.0f, 50.0f, 8000.0f, 200.0f, 0.0f, 1 });
-    presets.push_back({ "Bright Chamber", "Small", 0.9f, 20.0f, 35.0f, 30.0f, 110.0f, 16000.0f, 60.0f, 0.0f, 0 });
-    presets.push_back({ "Snare Plate", "Small", 1.2f, 0.0f, 40.0f, 35.0f, 100.0f, 15000.0f, 120.0f, 0.0f, 0 });
-    presets.push_back({ "Guitar Room", "Small", 0.7f, 12.0f, 28.0f, 25.0f, 95.0f, 10000.0f, 80.0f, 0.0f, 1 });
-    presets.push_back({ "Ambience", "Small", 0.5f, 30.0f, 40.0f, 20.0f, 120.0f, 13000.0f, 100.0f, 0.0f, 2 });
+    presets.push_back({ "Vocal Booth", "Small", "Tight, dry space perfect for voiceovers or intimate vocals.", 0.4f, 0.0f, 15.0f, 30.0f, 80.0f, 16000.0f, 80.0f, 0.0f, 2 });
+    presets.push_back({ "Drum Room", "Small", "Punchy room with fast decay, great for adding body to drums.", 0.6f, 10.0f, 25.0f, 40.0f, 100.0f, 14000.0f, 40.0f, 0.0f, 2 });
+    presets.push_back({ "Small Studio", "Small", "Natural sounding studio room for general instrument tracking.", 0.8f, 15.0f, 30.0f, 35.0f, 100.0f, 12000.0f, 50.0f, 0.0f, 2 });
+    presets.push_back({ "Tiled Room", "Small", "Bright, reflective space with hard surfaces.", 0.5f, 5.0f, 20.0f, 25.0f, 90.0f, 18000.0f, 100.0f, 0.0f, 0 });
+    presets.push_back({ "Percussion Box", "Small", "Short, dense decay to tighten up percussion loops.", 0.3f, 0.0f, 10.0f, 45.0f, 70.0f, 15000.0f, 150.0f, 0.0f, 2 });
+    presets.push_back({ "Closet", "Small", "Very dead, dry space. Good for 'in your face' sounds.", 0.2f, 0.0f, 5.0f, 20.0f, 50.0f, 8000.0f, 200.0f, 0.0f, 1 });
+    presets.push_back({ "Bright Chamber", "Small", "Exciting, splashy chamber for adding presence.", 0.9f, 20.0f, 35.0f, 30.0f, 110.0f, 16000.0f, 60.0f, 0.0f, 0 });
+    presets.push_back({ "Snare Plate", "Small", "Classic plate vibe tuned for snare crack and sizzle.", 1.2f, 0.0f, 40.0f, 35.0f, 100.0f, 15000.0f, 120.0f, 0.0f, 0 });
+    presets.push_back({ "Guitar Room", "Small", "Warm room ambience tailored for acoustic guitars.", 0.7f, 12.0f, 28.0f, 25.0f, 95.0f, 10000.0f, 80.0f, 0.0f, 1 });
+    presets.push_back({ "Ambience", "Small", "Subtle glue for a mix without obvious reverb tails.", 0.5f, 30.0f, 40.0f, 20.0f, 120.0f, 13000.0f, 100.0f, 0.0f, 2 });
 
     // Medium Spaces
-    presets.push_back({ "Medium Hall", "Medium", 1.8f, 25.0f, 50.0f, 40.0f, 100.0f, 10000.0f, 60.0f, 0.0f, 2 });
-    presets.push_back({ "Vintage Plate", "Medium", 2.0f, 10.0f, 55.0f, 35.0f, 100.0f, 14000.0f, 150.0f, 0.0f, 0 });
-    presets.push_back({ "Large Studio", "Medium", 1.5f, 20.0f, 45.0f, 30.0f, 100.0f, 12000.0f, 50.0f, 0.0f, 2 });
-    presets.push_back({ "Club", "Medium", 1.4f, 15.0f, 40.0f, 35.0f, 90.0f, 8000.0f, 100.0f, 10.0f, 1 });
-    presets.push_back({ "Garage", "Medium", 1.2f, 5.0f, 35.0f, 25.0f, 110.0f, 15000.0f, 80.0f, 0.0f, 2 });
-    presets.push_back({ "Stage", "Medium", 2.2f, 35.0f, 60.0f, 40.0f, 120.0f, 11000.0f, 70.0f, 0.0f, 2 });
-    presets.push_back({ "Stone Room", "Medium", 1.6f, 18.0f, 48.0f, 30.0f, 100.0f, 16000.0f, 90.0f, 0.0f, 2 });
-    presets.push_back({ "Warm Hall", "Medium", 2.4f, 40.0f, 65.0f, 45.0f, 100.0f, 7000.0f, 120.0f, 0.0f, 1 });
-    presets.push_back({ "Bright Plate", "Medium", 1.9f, 0.0f, 50.0f, 40.0f, 100.0f, 18000.0f, 200.0f, 0.0f, 0 });
-    presets.push_back({ "Recital Room", "Medium", 1.7f, 22.0f, 55.0f, 35.0f, 110.0f, 13000.0f, 60.0f, 0.0f, 2 });
+    presets.push_back({ "Medium Hall", "Medium", "Standard concert hall, balanced for orchestral or band mixes.", 1.8f, 25.0f, 50.0f, 40.0f, 100.0f, 10000.0f, 60.0f, 0.0f, 2 });
+    presets.push_back({ "Vintage Plate", "Medium", "Warm, modulated plate inspired by 70s hardware.", 2.0f, 10.0f, 55.0f, 35.0f, 100.0f, 14000.0f, 150.0f, 0.0f, 0 });
+    presets.push_back({ "Large Studio", "Medium", "Spacious live room for recording ensembles.", 1.5f, 20.0f, 45.0f, 30.0f, 100.0f, 12000.0f, 50.0f, 0.0f, 2 });
+    presets.push_back({ "Club", "Medium", "Darker, intimate venue feel with some early reflection character.", 1.4f, 15.0f, 40.0f, 35.0f, 90.0f, 8000.0f, 100.0f, 10.0f, 1 });
+    presets.push_back({ "Garage", "Medium", "Raw, unpolished space with flutter echoes.", 1.2f, 5.0f, 35.0f, 25.0f, 110.0f, 15000.0f, 80.0f, 0.0f, 2 });
+    presets.push_back({ "Stage", "Medium", "Simulates being on a wooden stage in a medium theater.", 2.2f, 35.0f, 60.0f, 40.0f, 120.0f, 11000.0f, 70.0f, 0.0f, 2 });
+    presets.push_back({ "Stone Room", "Medium", "Bright, diffusive room with hard stone walls.", 1.6f, 18.0f, 48.0f, 30.0f, 100.0f, 16000.0f, 90.0f, 0.0f, 2 });
+    presets.push_back({ "Warm Hall", "Medium", "Lush, rolled-off top end for a cozy atmosphere.", 2.4f, 40.0f, 65.0f, 45.0f, 100.0f, 7000.0f, 120.0f, 0.0f, 1 });
+    presets.push_back({ "Bright Plate", "Medium", "Shimmering plate with extended high frequencies.", 1.9f, 0.0f, 50.0f, 40.0f, 100.0f, 18000.0f, 200.0f, 0.0f, 0 });
+    presets.push_back({ "Recital Room", "Medium", "Clean, transparent space for solo instruments.", 1.7f, 22.0f, 55.0f, 35.0f, 110.0f, 13000.0f, 60.0f, 0.0f, 2 });
 
     // Large Spaces
-    presets.push_back({ "Concert Hall", "Large", 3.5f, 45.0f, 80.0f, 50.0f, 120.0f, 9000.0f, 40.0f, 0.0f, 2 });
-    presets.push_back({ "Cathedral", "Large", 5.0f, 60.0f, 95.0f, 45.0f, 130.0f, 6000.0f, 30.0f, 0.0f, 1 });
-    presets.push_back({ "Large Church", "Large", 4.2f, 50.0f, 85.0f, 40.0f, 115.0f, 8000.0f, 50.0f, 0.0f, 1 });
-    presets.push_back({ "Arena", "Large", 6.0f, 80.0f, 100.0f, 55.0f, 140.0f, 7000.0f, 40.0f, 20.0f, 2 });
-    presets.push_back({ "Cave", "Large", 4.5f, 30.0f, 90.0f, 50.0f, 100.0f, 5000.0f, 100.0f, 0.0f, 1 });
-    presets.push_back({ "Warehouse", "Large", 3.0f, 25.0f, 75.0f, 35.0f, 110.0f, 10000.0f, 60.0f, 0.0f, 2 });
-    presets.push_back({ "Stadium", "Large", 5.5f, 100.0f, 100.0f, 45.0f, 150.0f, 8500.0f, 40.0f, 15.0f, 2 });
-    presets.push_back({ "Grand Hall", "Large", 3.8f, 55.0f, 82.0f, 50.0f, 120.0f, 9500.0f, 45.0f, 0.0f, 2 });
-    presets.push_back({ "Big Plate", "Large", 3.2f, 15.0f, 70.0f, 40.0f, 110.0f, 12000.0f, 100.0f, 0.0f, 0 });
-    presets.push_back({ "Canyon", "Large", 4.8f, 120.0f, 95.0f, 40.0f, 160.0f, 11000.0f, 80.0f, 0.0f, 2 });
+    presets.push_back({ "Concert Hall", "Large", "Expansive hall for epic cinematic sounds.", 3.5f, 45.0f, 80.0f, 50.0f, 120.0f, 9000.0f, 40.0f, 0.0f, 2 });
+    presets.push_back({ "Cathedral", "Large", "Huge, rolling decay with long pre-delay.", 5.0f, 60.0f, 95.0f, 45.0f, 130.0f, 6000.0f, 30.0f, 0.0f, 1 });
+    presets.push_back({ "Large Church", "Large", "Traditional stone church acoustics.", 4.2f, 50.0f, 85.0f, 40.0f, 115.0f, 8000.0f, 50.0f, 0.0f, 1 });
+    presets.push_back({ "Arena", "Large", "Massive, diffuse sound typical of sports arenas.", 6.0f, 80.0f, 100.0f, 55.0f, 140.0f, 7000.0f, 40.0f, 20.0f, 2 });
+    presets.push_back({ "Cave", "Large", "Dark, resonant space with irregular reflections.", 4.5f, 30.0f, 90.0f, 50.0f, 100.0f, 5000.0f, 100.0f, 0.0f, 1 });
+    presets.push_back({ "Warehouse", "Large", "Industrial space with hard, slapping reflections.", 3.0f, 25.0f, 75.0f, 35.0f, 110.0f, 10000.0f, 60.0f, 0.0f, 2 });
+    presets.push_back({ "Stadium", "Large", "Outdoor stadium slapback and wash.", 5.5f, 100.0f, 100.0f, 45.0f, 150.0f, 8500.0f, 40.0f, 15.0f, 2 });
+    presets.push_back({ "Grand Hall", "Large", "Premium classical music venue simulation.", 3.8f, 55.0f, 82.0f, 50.0f, 120.0f, 9500.0f, 45.0f, 0.0f, 2 });
+    presets.push_back({ "Big Plate", "Large", "Oversized mechanical plate with huge sustain.", 3.2f, 15.0f, 70.0f, 40.0f, 110.0f, 12000.0f, 100.0f, 0.0f, 0 });
+    presets.push_back({ "Canyon", "Large", "Wide, multi-tap delay like reflections in a canyon.", 4.8f, 120.0f, 95.0f, 40.0f, 160.0f, 11000.0f, 80.0f, 0.0f, 2 });
 
     // Extreme Spaces
-    presets.push_back({ "Infinite Void", "Extreme", 9.5f, 50.0f, 100.0f, 100.0f, 180.0f, 15000.0f, 20.0f, 0.0f, 2 });
-    presets.push_back({ "Deep Space", "Extreme", 10.0f, 200.0f, 100.0f, 60.0f, 200.0f, 4000.0f, 20.0f, 30.0f, 2 });
-    presets.push_back({ "Alien Texture", "Extreme", 8.0f, 10.0f, 90.0f, 80.0f, 150.0f, 20000.0f, 500.0f, 50.0f, 0 });
-    presets.push_back({ "Frozen", "Extreme", 9.0f, 0.0f, 100.0f, 70.0f, 100.0f, 20000.0f, 20.0f, 0.0f, 0 });
-    presets.push_back({ "Underwater", "Extreme", 4.0f, 40.0f, 80.0f, 100.0f, 80.0f, 1000.0f, 20.0f, 0.0f, 1 });
-    presets.push_back({ "Ducking Wash", "Extreme", 5.0f, 20.0f, 90.0f, 100.0f, 140.0f, 12000.0f, 50.0f, 80.0f, 2 });
-    presets.push_back({ "Reverse Gated", "Extreme", 0.5f, 0.0f, 60.0f, 100.0f, 100.0f, 10000.0f, 100.0f, 90.0f, 0 });
-    presets.push_back({ "Metallic Drone", "Extreme", 7.0f, 5.0f, 95.0f, 50.0f, 50.0f, 18000.0f, 300.0f, 0.0f, 0 });
-    presets.push_back({ "Ethereal Shimmer", "Extreme", 8.5f, 100.0f, 100.0f, 60.0f, 160.0f, 16000.0f, 150.0f, 0.0f, 0 });
-    presets.push_back({ "Black Hole", "Extreme", 10.0f, 500.0f, 100.0f, 100.0f, 200.0f, 3000.0f, 20.0f, 0.0f, 1 });
+    presets.push_back({ "Infinite Void", "Extreme", "Endless decay for ambient textures.", 9.5f, 50.0f, 100.0f, 100.0f, 180.0f, 15000.0f, 20.0f, 0.0f, 2 });
+    presets.push_back({ "Deep Space", "Extreme", "Dark, modulated drone space.", 10.0f, 200.0f, 100.0f, 60.0f, 200.0f, 4000.0f, 20.0f, 30.0f, 2 });
+    presets.push_back({ "Alien Texture", "Extreme", "Strange, resonant metallic texture.", 8.0f, 10.0f, 90.0f, 80.0f, 150.0f, 20000.0f, 500.0f, 50.0f, 0 });
+    presets.push_back({ "Frozen", "Extreme", "Icy, bright shimmer reverb.", 9.0f, 0.0f, 100.0f, 70.0f, 100.0f, 20000.0f, 20.0f, 0.0f, 0 });
+    presets.push_back({ "Underwater", "Extreme", "Muffled, fluid sound with heavy modulation.", 4.0f, 40.0f, 80.0f, 100.0f, 80.0f, 1000.0f, 20.0f, 0.0f, 1 });
+    presets.push_back({ "Ducking Wash", "Extreme", "Huge reverb that ducks heavily out of the way.", 5.0f, 20.0f, 90.0f, 100.0f, 140.0f, 12000.0f, 50.0f, 80.0f, 2 });
+    presets.push_back({ "Reverse Gated", "Extreme", "Simulated reverse reverb effect.", 0.5f, 0.0f, 60.0f, 100.0f, 100.0f, 10000.0f, 100.0f, 90.0f, 0 });
+    presets.push_back({ "Metallic Drone", "Extreme", "Singing resonances for sound design.", 7.0f, 5.0f, 95.0f, 50.0f, 50.0f, 18000.0f, 300.0f, 0.0f, 0 });
+    presets.push_back({ "Ethereal Shimmer", "Extreme", "Bright, angelic tails.", 8.5f, 100.0f, 100.0f, 60.0f, 160.0f, 16000.0f, 150.0f, 0.0f, 0 });
+    presets.push_back({ "Black Hole", "Extreme", "Gravity-defying, heavy bass reverb.", 10.0f, 500.0f, 100.0f, 100.0f, 200.0f, 3000.0f, 20.0f, 0.0f, 1 });
 }
 
 void SirenXAudioProcessorEditor::loadPreset(int index)
@@ -620,6 +620,9 @@ void SirenXAudioProcessorEditor::loadPreset(int index)
         const auto& p = presets[static_cast<size_t>(index)];
 
         auto& apvts = audioProcessor.getAPVTS();
+
+        // Update tooltip to show description
+        presetCombo.setTooltip(p.description);
 
         // Parameter changes must be done on the message thread or via parameter attachment mechanisms
         // Since we are on the message thread (UI), we can set parameters directly but better to use the attachments?

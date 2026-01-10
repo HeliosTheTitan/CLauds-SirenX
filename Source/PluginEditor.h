@@ -157,6 +157,7 @@ private:
     {
         juce::String name;
         juce::String category;
+        juce::String description;
         float decay;    // s
         float preDelay; // ms
         float size;     // %

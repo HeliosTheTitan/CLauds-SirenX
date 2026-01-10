@@ -366,6 +366,16 @@ void SirenXLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectang
 }
 
 //==============================================================================
+juce::PopupMenu::Options SirenXLookAndFeel::getOptionsForComboBoxPopupMenu(juce::ComboBox& box, juce::Label& label)
+{
+    // Configure popup menu options
+    return juce::PopupMenu::Options().withTargetComponent(&box)
+                                     .withMinimumNumColumns(1)
+                                     .withMaximumNumColumns(1)
+                                     .withStandardItemHeight(label.getHeight());
+}
+
+//==============================================================================
 juce::Rectangle<int> SirenXLookAndFeel::getTooltipBounds(const juce::String& tipText, juce::Point<int> screenPos,
                                                          juce::Rectangle<int> parentArea)
 {
