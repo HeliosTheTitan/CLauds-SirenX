@@ -293,11 +293,20 @@ SirenXKnob::SirenXKnob(const juce::String& labelText, const juce::String& suffix
     valueLabel.setColour(juce::Label::textColourId, SirenXColors::textBright);
     addAndMakeVisible(valueLabel);
     
-    slider.onValueChange = [this]()
+    slider.onValueChange = [this]() { forceUpdateLabel(); };
+}
+
+void SirenXKnob::forceUpdateLabel()
+{
+    double value = slider.getValue();
+    juce::String text;
+
+    if (customValueText)
     {
-        juce::String text;
-        double value = slider.getValue();
-        
+        text = customValueText(value);
+    }
+    else
+    {
         if (value >= 1000.0)
             text = juce::String(value / 1000.0, 2) + "k";
         else if (value >= 100.0)
@@ -309,9 +318,9 @@ SirenXKnob::SirenXKnob(const juce::String& labelText, const juce::String& suffix
         
         if (suffixText.isNotEmpty())
             text += " " + suffixText;
-        
-        valueLabel.setText(text, juce::dontSendNotification);
-    };
+    }
+
+    valueLabel.setText(text, juce::dontSendNotification);
 }
 
 void SirenXKnob::setPalette(const SirenXPalette& palette)
@@ -339,6 +348,53 @@ void SirenXKnob::resized()
 }
 
 //==============================================================================
+// Ducking Meter Implementation
+//==============================================================================
+void DuckingMeter::setGainReduction(float gain)
+{
+    if (std::abs(gain - currentGain) > 0.001f)
+    {
+        currentGain = gain;
+        repaint();
+    }
+}
+
+void DuckingMeter::setPalette(const SirenXPalette& palette)
+{
+    currentPalette = palette;
+    repaint();
+}
+
+void DuckingMeter::paint(juce::Graphics& g)
+{
+    auto bounds = getLocalBounds().toFloat();
+
+    // Background
+    g.setColour(currentPalette.backgroundDark.darker(0.3f));
+    g.fillRoundedRectangle(bounds, 2.0f);
+
+    // Meter
+    float height = bounds.getHeight();
+    float meterHeight = height * (1.0f - currentGain); // Gain reduction goes down from top or up from bottom?
+    // Usually Gain Reduction meters show how much is reduced.
+    // If gain is 1.0 (no reduction), bar is empty.
+    // If gain is 0.0 (full reduction), bar is full.
+    // Let's draw it from top down as is common for GR meters, or maybe bottom up?
+    // Let's do top-down for GR.
+
+    if (meterHeight > 0.5f)
+    {
+        g.setColour(currentPalette.accentBright);
+        g.fillRoundedRectangle(bounds.getX(), bounds.getY(), bounds.getWidth(), meterHeight, 2.0f);
+    }
+
+    // Border
+    g.setColour(currentPalette.metalBlue);
+    g.drawRoundedRectangle(bounds, 2.0f, 1.0f);
+}
+
+
+//==============================================================================
 // Main Editor Implementation
 //==============================================================================
 SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
@@ -357,6 +413,18 @@ SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
     addAndMakeVisible(highPassKnob);
     addAndMakeVisible(lowPassKnob);
     addAndMakeVisible(duckingKnob);
+    addAndMakeVisible(duckingMeter);
+
+    decayKnob.customValueText = [this](double value) -> juce::String {
+        float multiplier = 1.0f;
+        auto character = audioProcessor.getCharacter();
+        if (character == SirenXAudioProcessor::ReverbCharacter::Plate)
+            multiplier = 0.95f;
+        else if (character == SirenXAudioProcessor::ReverbCharacter::Vintage)
+            multiplier = 1.05f;
+
+        return juce::String(value * multiplier, 2) + " s";
+    };
 
     // Character buttons setup
     auto setupCharacterButton = [this](juce::TextButton& button, const juce::String& tooltip) {
@@ -418,7 +486,7 @@ SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
     duckingAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "ducking", duckingKnob.getSlider());
     
-    decayKnob.getSlider().setTooltip("Controls reverb tail length (0.1s - 30s)");
+    decayKnob.getSlider().setTooltip("Controls reverb tail length (0.1s - 10s)");
     preDelayKnob.getSlider().setTooltip("Initial delay before reverb (0 - 500ms)");
     sizeKnob.getSlider().setTooltip("Room size / density of reflections");
     mixKnob.getSlider().setTooltip("Dry/Wet blend");
@@ -428,12 +496,25 @@ SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
     duckingKnob.getSlider().setTooltip("Reduces reverb when input signal is present");
     tooltipToggle.setTooltip("Toggle tooltips on/off");
 
+    // duckingMeter is a custom Component, but base Component has setTooltip.
+    // However, sometimes it requires explicit namespace or access if something is weird.
+    // The previous error was "no member named setTooltip".
+    // It's possible DuckingMeter inherits privately? No, it says public.
+    // Let's verify DuckingMeter definition in .h again.
+    // "class DuckingMeter : public juce::Component"
+    // Maybe the compiler is confused.
+    // I will try removing this line for now as it's just a tooltip on a visualizer.
+    // Or I can cast it. static_cast<juce::Component*>(&duckingMeter)->setTooltip(...)
+
+    // Removing it for safety to fix build.
+    // duckingMeter.setTooltip("Gain Reduction Amount");
+
     // Initialize character button states
     updateCharacterButtons();
 
     setSize(750, 560); // Slightly taller to fit buttons
 
-    startTimerHz(10);
+    startTimerHz(24); // Faster timer for smoother meter
 }
 
 SirenXAudioProcessorEditor::~SirenXAudioProcessorEditor()
@@ -446,6 +527,9 @@ void SirenXAudioProcessorEditor::timerCallback()
 {
     // Update character button states periodically in case parameter changed externally
     updateCharacterButtons();
+
+    // Update ducking meter
+    duckingMeter.setGainReduction(audioProcessor.getDuckingGain());
 }
 
 void SirenXAudioProcessorEditor::updateCharacterButtons()
@@ -473,6 +557,8 @@ void SirenXAudioProcessorEditor::updateCharacterButtons()
     plateButton.repaint();
     vintageButton.repaint();
     modernButton.repaint();
+
+    decayKnob.forceUpdateLabel();
 }
 
 //==============================================================================
@@ -701,7 +787,10 @@ void SirenXAudioProcessorEditor::resized()
     widthKnob.setBounds(row2.removeFromLeft(knobWidth));
     highPassKnob.setBounds(row2.removeFromLeft(knobWidth));
     lowPassKnob.setBounds(row2.removeFromLeft(knobWidth));
-    duckingKnob.setBounds(row2.removeFromLeft(knobWidth));
+
+    auto duckingArea = row2.removeFromLeft(knobWidth);
+    duckingMeter.setBounds(duckingArea.removeFromRight(10).withTrimmedTop(18).withTrimmedBottom(18).reduced(2, 0));
+    duckingKnob.setBounds(duckingArea);
 
     // Character buttons row
     mainControls.removeFromTop(15);

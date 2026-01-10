@@ -76,6 +76,9 @@ public:
     
     void setPalette(const SirenXPalette& palette);
 
+    void forceUpdateLabel();
+    std::function<juce::String(double)> customValueText;
+
 private:
     juce::Slider slider;
     juce::Label label;
@@ -83,6 +86,22 @@ private:
     juce::String suffixText;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SirenXKnob)
+};
+
+//==============================================================================
+// Ducking Meter Component
+//==============================================================================
+class DuckingMeter : public juce::Component
+{
+public:
+    DuckingMeter() = default;
+    void paint(juce::Graphics& g) override;
+    void setGainReduction(float gain);
+    void setPalette(const SirenXPalette& palette);
+
+private:
+    float currentGain = 1.0f;
+    SirenXPalette currentPalette = SirenXPalette::getNeonBlue();
 };
 
 //==============================================================================
@@ -121,6 +140,8 @@ private:
     SirenXKnob lowPassKnob    { "LOW PASS", "Hz" };
     SirenXKnob highPassKnob   { "HIGH PASS", "Hz" };
     SirenXKnob duckingKnob    { "DUCKING", "%" };
+
+    DuckingMeter duckingMeter;
 
     // Character selection buttons
     juce::TextButton plateButton   { "PLATE" };

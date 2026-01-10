@@ -247,6 +247,9 @@ void SirenXAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     // Update level meters (use RMS for smoother display)
     inputLevel.store(tempInputBuffer.getRMSLevel(0, 0, buffer.getNumSamples()));
     outputLevel.store(buffer.getRMSLevel(0, 0, buffer.getNumSamples()));
+
+    // Update ducking gain for visualizer
+    lastDuckingGain.store(reverbEngine.getDuckingGain());
 }
 
 //==============================================================================

@@ -63,6 +63,7 @@ public:
     
     float getInputLevel() const { return inputLevel.load(); }
     float getOutputLevel() const { return outputLevel.load(); }
+    float getDuckingGain() const { return lastDuckingGain.load(); }
     
     // Optimized FIFO for visualization
     static constexpr int fftSize = 2048;
@@ -122,6 +123,7 @@ private:
 
     std::atomic<float> inputLevel { 0.0f };
     std::atomic<float> outputLevel { 0.0f };
+    std::atomic<float> lastDuckingGain { 1.0f };
     
     double currentBPM = 120.0;
     ReverbCharacter currentCharacter = ReverbCharacter::Modern;

@@ -836,6 +836,11 @@ public:
                 duckGain = juce::jlimit(0.0f, 1.0f, duckGain);
                 wetL *= duckGain;
                 wetR *= duckGain;
+                currentDuckingGain = duckGain;
+            }
+            else
+            {
+                currentDuckingGain = 1.0f;
             }
 
             // Mix: dry signal is untouched, only wet signal is filtered
@@ -846,6 +851,8 @@ public:
 
     float getLastWetL() const { return lastWetL; }
     float getLastWetR() const { return lastWetR; }
+
+    float getDuckingGain() const { return currentDuckingGain; }
 
 private:
     void updateTankDecay()
@@ -888,4 +895,5 @@ private:
     float duckingEnvelope = 0.0f;
     float lastWetL = 0.0f;
     float lastWetR = 0.0f;
+    float currentDuckingGain = 1.0f;
 };
