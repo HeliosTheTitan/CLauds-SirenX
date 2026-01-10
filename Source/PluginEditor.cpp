@@ -293,25 +293,39 @@ SirenXKnob::SirenXKnob(const juce::String& labelText, const juce::String& suffix
     valueLabel.setColour(juce::Label::textColourId, SirenXColors::textBright);
     addAndMakeVisible(valueLabel);
     
-    slider.onValueChange = [this]()
+    slider.onValueChange = [this]() { updateValueLabel(); };
+}
+
+void SirenXKnob::setAutoMode(bool shouldBeAuto)
+{
+    isAutoMode = shouldBeAuto;
+    updateValueLabel();
+}
+
+void SirenXKnob::updateValueLabel()
+{
+    if (isAutoMode)
     {
-        juce::String text;
-        double value = slider.getValue();
-        
-        if (value >= 1000.0)
-            text = juce::String(value / 1000.0, 2) + "k";
-        else if (value >= 100.0)
-            text = juce::String(static_cast<int>(value));
-        else if (value >= 10.0)
-            text = juce::String(value, 1);
-        else
-            text = juce::String(value, 2);
-        
-        if (suffixText.isNotEmpty())
-            text += " " + suffixText;
-        
-        valueLabel.setText(text, juce::dontSendNotification);
-    };
+        valueLabel.setText("auto", juce::dontSendNotification);
+        return;
+    }
+
+    juce::String text;
+    double value = slider.getValue();
+
+    if (value >= 1000.0)
+        text = juce::String(value / 1000.0, 2) + "k";
+    else if (value >= 100.0)
+        text = juce::String(static_cast<int>(value));
+    else if (value >= 10.0)
+        text = juce::String(value, 1);
+    else
+        text = juce::String(value, 2);
+
+    if (suffixText.isNotEmpty())
+        text += " " + suffixText;
+
+    valueLabel.setText(text, juce::dontSendNotification);
 }
 
 void SirenXKnob::setPalette(const SirenXPalette& palette)
@@ -385,6 +399,15 @@ SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
         audioProcessor.setCharacter(SirenXAudioProcessor::ReverbCharacter::Modern);
         updateCharacterButtons();
     };
+
+    autoButton.setColour(juce::ToggleButton::textColourId, SirenXColors::textDim);
+    autoButton.setColour(juce::ToggleButton::tickColourId, SirenXColors::accentBright);
+    autoButton.setToggleState(false, juce::dontSendNotification);
+    autoButton.onClick = [this] {
+        preDelayKnob.setAutoMode(autoButton.getToggleState());
+    };
+    autoButton.setTooltip("Toggle auto pre-delay sync (simulation)");
+    addAndMakeVisible(autoButton);
 
     tooltipToggle.setColour(juce::ToggleButton::textColourId, SirenXColors::textDim);
     tooltipToggle.setColour(juce::ToggleButton::tickColourId, SirenXColors::accentBright);
@@ -686,34 +709,48 @@ void SirenXAudioProcessorEditor::resized()
     faceplateArea.removeFromTop(20);
     
     auto mainControls = faceplateArea;
-    int knobWidth = mainControls.getWidth() / 4;
     int knobHeight = 85;
 
+    // Use FlexBox for even spacing of knobs
+    auto layoutKnobRow = [&](juce::Rectangle<int> area, std::initializer_list<juce::Component*> knobs) {
+        juce::FlexBox flex;
+        flex.flexDirection = juce::FlexBox::Direction::row;
+        flex.justifyContent = juce::FlexBox::JustifyContent::spaceBetween;
+        flex.alignContent = juce::FlexBox::AlignContent::stretch;
+
+        for (auto* knob : knobs)
+            flex.items.add(juce::FlexItem(*knob).withFlex(1.0f).withMargin({ 0.0f, 5.0f, 0.0f, 5.0f }));
+
+        flex.performLayout(area);
+    };
+
     auto row1 = mainControls.removeFromTop(knobHeight);
-    decayKnob.setBounds(row1.removeFromLeft(knobWidth));
-    preDelayKnob.setBounds(row1.removeFromLeft(knobWidth));
-    sizeKnob.setBounds(row1.removeFromLeft(knobWidth));
-    mixKnob.setBounds(row1.removeFromLeft(knobWidth));
+    layoutKnobRow(row1, { &decayKnob, &preDelayKnob, &sizeKnob, &mixKnob });
 
     mainControls.removeFromTop(15);
 
     auto row2 = mainControls.removeFromTop(knobHeight);
-    widthKnob.setBounds(row2.removeFromLeft(knobWidth));
-    highPassKnob.setBounds(row2.removeFromLeft(knobWidth));
-    lowPassKnob.setBounds(row2.removeFromLeft(knobWidth));
-    duckingKnob.setBounds(row2.removeFromLeft(knobWidth));
+    layoutKnobRow(row2, { &widthKnob, &highPassKnob, &lowPassKnob, &duckingKnob });
 
     // Character buttons row
     mainControls.removeFromTop(15);
     auto buttonRow = mainControls.removeFromTop(28);
-    int buttonWidth = 100;
-    int totalButtonWidth = buttonWidth * 3 + 20; // 3 buttons + spacing
-    int buttonStartX = (buttonRow.getWidth() - totalButtonWidth) / 2;
     
-    buttonRow.removeFromLeft(buttonStartX);
-    plateButton.setBounds(buttonRow.removeFromLeft(buttonWidth));
-    buttonRow.removeFromLeft(10);
-    vintageButton.setBounds(buttonRow.removeFromLeft(buttonWidth));
-    buttonRow.removeFromLeft(10);
-    modernButton.setBounds(buttonRow.removeFromLeft(buttonWidth));
+    juce::FlexBox buttonFlex;
+    buttonFlex.flexDirection = juce::FlexBox::Direction::row;
+    buttonFlex.justifyContent = juce::FlexBox::JustifyContent::center;
+    buttonFlex.alignContent = juce::FlexBox::AlignContent::center;
+
+    float buttonW = 100.0f;
+    float buttonH = 28.0f;
+    float margin = 5.0f;
+
+    buttonFlex.items.add(juce::FlexItem(plateButton).withWidth(buttonW).withHeight(buttonH).withMargin({0, margin, 0, margin}));
+    buttonFlex.items.add(juce::FlexItem(vintageButton).withWidth(buttonW).withHeight(buttonH).withMargin({0, margin, 0, margin}));
+    buttonFlex.items.add(juce::FlexItem(modernButton).withWidth(buttonW).withHeight(buttonH).withMargin({0, margin, 0, margin}));
+
+    // Add Auto button beside Modern button (MB Mode)
+    buttonFlex.items.add(juce::FlexItem(autoButton).withWidth(60.0f).withHeight(buttonH).withMargin({0, margin + 10.0f, 0, margin}));
+
+    buttonFlex.performLayout(buttonRow);
 }

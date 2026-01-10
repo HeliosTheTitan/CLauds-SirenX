@@ -75,12 +75,16 @@ public:
     void setLabelText(const juce::String& text) { label.setText(text, juce::dontSendNotification); }
     
     void setPalette(const SirenXPalette& palette);
+    void setAutoMode(bool shouldBeAuto);
 
 private:
+    void updateValueLabel();
+
     juce::Slider slider;
     juce::Label label;
     juce::Label valueLabel;
     juce::String suffixText;
+    bool isAutoMode = false;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SirenXKnob)
 };
@@ -127,6 +131,7 @@ private:
     juce::TextButton vintageButton { "VINTAGE" };
     juce::TextButton modernButton  { "MODERN" };
 
+    juce::ToggleButton autoButton    { "AUTO" };
     juce::ToggleButton tooltipToggle { "HINTS" };
     std::unique_ptr<juce::TooltipWindow> tooltipWindow;
     
