@@ -698,6 +698,20 @@ public:
         highCutFilter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
         highCutFilter.setCutoffFrequency(20000.0f);
 
+        // Smart Ducking Filters
+        // Sidechain: Bandpass at 350Hz to detect mud
+        sidechainFilter.prepare(spec);
+        sidechainFilter.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
+        sidechainFilter.setCutoffFrequency(350.0f);
+        sidechainFilter.setResonance(0.707f); // Q ~ 1.0
+
+        // Unmask: Bandpass filter at 350Hz.
+        // We will subtract this from the signal to create a notch (unmasking effect)
+        unmaskFilter.prepare(spec);
+        unmaskFilter.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
+        unmaskFilter.setCutoffFrequency(350.0f);
+        unmaskFilter.setResonance(0.707f);
+
         duckingEnvelope = 0.0f;
         setCharacter(2);
         prepared = true;
@@ -711,6 +725,8 @@ public:
         tank.clear();
         lowCutFilter.reset();
         highCutFilter.reset();
+        sidechainFilter.reset();
+        unmaskFilter.reset();
         duckingEnvelope = 0.0f;
     }
 
@@ -789,9 +805,15 @@ public:
             float dryL = leftChannel[i];
             float dryR = rightChannel[i];
 
-            float inputLevel = std::abs(dryL) + std::abs(dryR);
-            float attackCoeff = 0.002f;
-            float releaseCoeff = 0.9997f;
+            // Smart Ducking Analysis
+            // Analyze the "Mud" frequency band (350Hz) of the input
+            float drySum = (dryL + dryR) * 0.5f;
+            float mudEnergy = sidechainFilter.processSample(0, drySum); // Use channel 0 state
+            float inputLevel = std::abs(mudEnergy);
+
+            // Fast attack, smooth release for transparent unmasking
+            float attackCoeff = 0.01f;
+            float releaseCoeff = 0.9995f;
             
             if (inputLevel > duckingEnvelope)
                 duckingEnvelope = duckingEnvelope + attackCoeff * (inputLevel - duckingEnvelope);
@@ -832,11 +854,23 @@ public:
 
             if (duckingAmount > 0.0f)
             {
-                float duckGain = 1.0f - duckingEnvelope * duckingAmount * 3.0f;
-                duckGain = juce::jlimit(0.0f, 1.0f, duckGain);
-                wetL *= duckGain;
-                wetR *= duckGain;
-                currentDuckingGain = duckGain;
+                // Dynamic EQ Logic:
+                // We calculate how much of the bandpass signal to subtract.
+                // Higher envelope = more subtraction = deeper notch.
+
+                float reductionAmount = duckingEnvelope * duckingAmount * 6.0f;
+                reductionAmount = juce::jlimit(0.0f, 1.0f, reductionAmount);
+
+                // Process wet signal through bandpass
+                float bpL = unmaskFilter.processSample(0, wetL);
+                float bpR = unmaskFilter.processSample(1, wetR);
+
+                // Subtract bandpass from original to create dynamic notch
+                wetL -= bpL * reductionAmount;
+                wetR -= bpR * reductionAmount;
+
+                // For visualization, approximate gain
+                currentDuckingGain = 1.0f - reductionAmount * 0.5f;
             }
             else
             {
@@ -891,6 +925,10 @@ private:
 
     juce::dsp::StateVariableTPTFilter<float> lowCutFilter;
     juce::dsp::StateVariableTPTFilter<float> highCutFilter;
+
+    // Intelligent Ducking Filters
+    juce::dsp::StateVariableTPTFilter<float> sidechainFilter;
+    juce::dsp::StateVariableTPTFilter<float> unmaskFilter;
 
     float duckingEnvelope = 0.0f;
     float lastWetL = 0.0f;

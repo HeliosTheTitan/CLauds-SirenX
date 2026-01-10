@@ -369,28 +369,37 @@ void DuckingMeter::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
 
-    // Background
-    g.setColour(currentPalette.backgroundDark.darker(0.3f));
-    g.fillRoundedRectangle(bounds, 2.0f);
+    // Semi-transparent background for overlay style
+    g.setColour(currentPalette.backgroundDark.withAlpha(0.6f));
+    g.fillRoundedRectangle(bounds, 3.0f);
 
-    // Meter
-    float height = bounds.getHeight();
-    float meterHeight = height * (1.0f - currentGain); // Gain reduction goes down from top or up from bottom?
-    // Usually Gain Reduction meters show how much is reduced.
-    // If gain is 1.0 (no reduction), bar is empty.
-    // If gain is 0.0 (full reduction), bar is full.
-    // Let's draw it from top down as is common for GR meters, or maybe bottom up?
-    // Let's do top-down for GR.
+    // Meter Area
+    auto meterArea = bounds.reduced(3.0f, 3.0f);
+
+    // Gain Reduction Bar (Top-Down)
+    float height = meterArea.getHeight();
+    float meterHeight = height * (1.0f - currentGain);
 
     if (meterHeight > 0.5f)
     {
-        g.setColour(currentPalette.accentBright);
-        g.fillRoundedRectangle(bounds.getX(), bounds.getY(), bounds.getWidth(), meterHeight, 2.0f);
+        // Gradient for the bar (Yellow/Orange for reduction)
+        juce::Colour c1 = juce::Colours::yellow.withAlpha(0.9f);
+        juce::Colour c2 = juce::Colours::red.withAlpha(0.9f);
+
+        juce::ColourGradient grad(c1, meterArea.getX(), meterArea.getY(),
+                                  c2, meterArea.getX(), meterArea.getBottom(), false);
+        g.setGradientFill(grad);
+        g.fillRoundedRectangle(meterArea.getX(), meterArea.getY(), meterArea.getWidth(), meterHeight, 2.0f);
     }
 
     // Border
-    g.setColour(currentPalette.metalBlue);
-    g.drawRoundedRectangle(bounds, 2.0f, 1.0f);
+    g.setColour(currentPalette.metalBlue.withAlpha(0.5f));
+    g.drawRoundedRectangle(bounds, 3.0f, 1.0f);
+
+    // Label "GR"
+    g.setColour(currentPalette.textDim.withAlpha(0.8f));
+    g.setFont(10.0f);
+    g.drawText("GR", bounds.removeFromBottom(12), juce::Justification::centred);
 }
 
 
@@ -787,10 +796,12 @@ void SirenXAudioProcessorEditor::resized()
     widthKnob.setBounds(row2.removeFromLeft(knobWidth));
     highPassKnob.setBounds(row2.removeFromLeft(knobWidth));
     lowPassKnob.setBounds(row2.removeFromLeft(knobWidth));
+    duckingKnob.setBounds(row2.removeFromLeft(knobWidth));
 
-    auto duckingArea = row2.removeFromLeft(knobWidth);
-    duckingMeter.setBounds(duckingArea.removeFromRight(10).withTrimmedTop(18).withTrimmedBottom(18).reduced(2, 0));
-    duckingKnob.setBounds(duckingArea);
+    // Place Ducking Meter in top-right of Spectrum Display
+    auto spectrumBounds = spectrumDisplay->getBounds();
+    duckingMeter.setBounds(spectrumBounds.getRight() - 25, spectrumBounds.getY() + 10,
+                           15, 100);
 
     // Character buttons row
     mainControls.removeFromTop(15);
