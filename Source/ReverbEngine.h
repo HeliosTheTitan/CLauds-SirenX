@@ -204,6 +204,18 @@ public:
     void setStereoWidth(float w) { stereoWidth = juce::jlimit(0.0f, 2.0f, w); }
     void setDucking(float d) { duckingAmount = juce::jlimit(0.0f, 1.0f, d); }
 
+    void setMode(int mode)
+    {
+        if (currentMode != mode)
+        {
+            currentMode = mode;
+            shouldUpdateParams = true;
+        }
+    }
+
+    // Returns the current gain reduction (0.0 = full reduction, 1.0 = no reduction)
+    float getDuckingGain() const { return currentDuckingGain.load(); }
+
     void processBlock(juce::AudioBuffer<float>& buffer)
     {
         if (!prepared) return;
@@ -273,6 +285,7 @@ public:
         }
 
         // 7. Ducking
+        float currentGain = 1.0f;
         if (duckingAmount > 0.0f)
         {
             float inputLevel = dryBuffer.getMagnitude(0, numSamples);
@@ -281,9 +294,11 @@ public:
             if (env > threshold)
             {
                 float reduction = (env - threshold) * duckingAmount * 2.0f;
-                buffer.applyGain(std::max(0.0f, 1.0f - reduction));
+                currentGain = std::max(0.0f, 1.0f - reduction);
+                buffer.applyGain(currentGain);
             }
         }
+        currentDuckingGain.store(currentGain);
 
         // 8. Final Mix (Dry + Wet)
         float dryGain = 1.0f - mix;
@@ -336,17 +351,41 @@ private:
     {
         juce::dsp::Reverb::Parameters params;
 
-        // Map Decay (0.1s - 5.0s) to Room Size (0.0 - 1.0)
+        // Map Decay (0.1s - 30.0s) to Room Size (0.0 - 1.0)
         // Non-linear mapping for better feel
-        params.roomSize = juce::jlimit(0.0f, 0.95f, 0.3f + (decayTimeSec / 5.0f) * 0.65f);
+        // Adjusted for longer decay
+        params.roomSize = juce::jlimit(0.0f, 0.99f, 0.3f + (decayTimeSec / 30.0f) * 0.69f);
 
-        params.damping = 0.5f; // Could expose this?
+        // Adjust parameters based on Mode
+        // 0: Plate (Bright, Dense)
+        // 1: Vintage (Darker, warmer)
+        // 2: Modern (Clean, Wide)
+
+        switch (currentMode)
+        {
+            case 0: // Plate
+                params.damping = 0.2f;
+                break;
+            case 1: // Vintage
+                params.damping = 0.7f;
+                break;
+            case 2: // Modern
+                params.damping = 0.4f;
+                break;
+            default:
+                params.damping = 0.5f;
+                break;
+        }
+
         params.width = juce::jlimit(0.0f, 1.0f, size); // Use size for width
         params.wetLevel = 1.0f; // Handled by our mix
         params.dryLevel = 0.0f;
         params.freezeMode = 0.0f;
 
         reverb.setParameters(params);
+
+        // Also update IR Thread params if needed (simulate ER difference)
+        // Ideally we would change the IR generation strategy based on mode
     }
 
     double sampleRate = 44100.0;
@@ -390,7 +429,10 @@ private:
     float mix = 0.5f;
     float stereoWidth = 1.0f;
     float duckingAmount = 0.0f;
+    int currentMode = 2; // Default to Modern
 
     float lastWetL = 0.0f;
     float lastWetR = 0.0f;
+
+    std::atomic<float> currentDuckingGain { 1.0f };
 };

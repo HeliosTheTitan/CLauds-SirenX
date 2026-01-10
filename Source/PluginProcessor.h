@@ -66,6 +66,9 @@ public:
     float getInputLevel() const { return inputLevel.load(); }
     float getOutputLevel() const { return outputLevel.load(); }
     
+    // Get Ducking reduction for visualization
+    float getDuckingReduction() const { return reverbEngine.getDuckingGain(); }
+
     // Audio Capture for Visualization
     static constexpr int fftSize = 4096;
 
@@ -108,6 +111,8 @@ private:
     //==============================================================================
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout();
     
+    void loadPreset(int index);
+
     ReverbEngine reverbEngine;
     juce::AudioProcessorValueTreeState apvts;
     
