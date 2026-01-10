@@ -1018,11 +1018,18 @@ void SirenXAudioProcessorEditor::resized()
     auto bounds = getLocalBounds();
     auto headerBounds = bounds.removeFromTop(50);
 
-    tooltipToggle.setBounds(headerBounds.removeFromLeft(120).withTrimmedLeft(35).reduced(0, 15).withWidth(80));
+    // Layout Hints and Presets
+    int railWidth = 30;
+    int margin = 5;
+    int headerButtonWidth = 160;
+    int headerButtonHeight = 24;
+    int headerButtonY = headerBounds.getY() + (headerBounds.getHeight() - headerButtonHeight) / 2;
 
-    // Position Preset Combo in top right header
-    auto presetArea = headerBounds.removeFromRight(200).reduced(10, 12);
-    presetCombo.setBounds(presetArea);
+    // Hints button on the left, flush with rail + margin
+    tooltipToggle.setBounds(railWidth + margin, headerButtonY, headerButtonWidth, headerButtonHeight);
+
+    // Preset Combo on the right, flush with rail + margin
+    presetCombo.setBounds(getWidth() - railWidth - margin - headerButtonWidth, headerButtonY, headerButtonWidth, headerButtonHeight);
 
     if (getWidth() > 0 && getHeight() > 0)
     {
