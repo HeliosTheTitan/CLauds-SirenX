@@ -396,10 +396,10 @@ void DuckingMeter::paint(juce::Graphics& g)
     g.setColour(currentPalette.metalBlue.withAlpha(0.5f));
     g.drawRoundedRectangle(bounds, 3.0f, 1.0f);
 
-    // Label "GR"
+    // Label "RR" (Reverb Reduction)
     g.setColour(currentPalette.textDim.withAlpha(0.8f));
     g.setFont(10.0f);
-    g.drawText("GR", bounds.removeFromBottom(12), juce::Justification::centred);
+    g.drawText("RR", bounds.removeFromBottom(12), juce::Justification::centred);
 }
 
 

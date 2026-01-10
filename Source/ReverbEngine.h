@@ -712,7 +712,18 @@ public:
         unmaskFilter.setCutoffFrequency(350.0f);
         unmaskFilter.setResonance(0.707f);
 
+        // Spectrum Analysis Filters for Intelligent Tracking
+        analysisLP.prepare(spec);
+        analysisLP.setType(juce::dsp::FirstOrderTPTFilterType::lowpass);
+        analysisLP.setCutoffFrequency(800.0f); // Split point
+
+        analysisHP.prepare(spec);
+        analysisHP.setType(juce::dsp::FirstOrderTPTFilterType::highpass);
+        analysisHP.setCutoffFrequency(800.0f);
+
         duckingEnvelope = 0.0f;
+        trackerFrequency = 350.0f;
+
         setCharacter(2);
         prepared = true;
     }
@@ -727,7 +738,10 @@ public:
         highCutFilter.reset();
         sidechainFilter.reset();
         unmaskFilter.reset();
+        analysisLP.reset();
+        analysisHP.reset();
         duckingEnvelope = 0.0f;
+        trackerFrequency = 350.0f;
     }
 
     void setDecayTime(float seconds)
@@ -804,12 +818,31 @@ public:
         {
             float dryL = leftChannel[i];
             float dryR = rightChannel[i];
-
-            // Smart Ducking Analysis
-            // Analyze the "Mud" frequency band (350Hz) of the input
             float drySum = (dryL + dryR) * 0.5f;
-            float mudEnergy = sidechainFilter.processSample(0, drySum); // Use channel 0 state
-            float inputLevel = std::abs(mudEnergy);
+
+            // Intelligent Tracking
+            // Analyze spectral balance to find the "body" of the signal
+            float lowEnergy = std::abs(analysisLP.processSample(0, drySum));
+            float highEnergy = std::abs(analysisHP.processSample(0, drySum));
+
+            float balance = highEnergy / (lowEnergy + highEnergy + 1e-5f);
+
+            // Map balance (0..1) to Frequency Range (200Hz .. 3000Hz)
+            // If balance is 0 (all low), freq is 200Hz. If 1 (all high), freq is 3000Hz.
+            float targetFreq = 200.0f + balance * 2800.0f;
+
+            // Smooth the tracking frequency (slow reaction to avoid modulation artifacts)
+            trackerFrequency = trackerFrequency * 0.999f + targetFreq * 0.001f;
+
+            // Update filters occasionally (every 64 samples would be efficient, but per-sample is smoother)
+            // To save CPU, we could do it less often, but here we do per sample for best quality
+            sidechainFilter.setCutoffFrequency(trackerFrequency);
+            unmaskFilter.setCutoffFrequency(trackerFrequency);
+
+            // Smart Ducking Envelope
+            // Detect energy at the tracked frequency
+            float bandEnergy = sidechainFilter.processSample(0, drySum);
+            float inputLevel = std::abs(bandEnergy);
 
             // Fast attack, smooth release for transparent unmasking
             float attackCoeff = 0.01f;
@@ -930,7 +963,12 @@ private:
     juce::dsp::StateVariableTPTFilter<float> sidechainFilter;
     juce::dsp::StateVariableTPTFilter<float> unmaskFilter;
 
+    // Tracking Filters
+    juce::dsp::FirstOrderTPTFilter<float> analysisLP;
+    juce::dsp::FirstOrderTPTFilter<float> analysisHP;
+
     float duckingEnvelope = 0.0f;
+    float trackerFrequency = 350.0f;
     float lastWetL = 0.0f;
     float lastWetR = 0.0f;
     float currentDuckingGain = 1.0f;
