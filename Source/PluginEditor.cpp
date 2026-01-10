@@ -603,6 +603,56 @@ void SirenXAudioProcessorEditor::drawBackground(juce::Graphics& g)
         g.drawLine(x, y, x + len, y + random.nextFloat() * 2.0f - 1.0f, 0.5f);
     }
 
+    // Draw Neon Grid Lines
+    auto controlsArea = bounds;
+    // Remove header (50), footer (35), rails (30 each), margins (15, 10)
+    controlsArea.removeFromTop(50);
+    controlsArea.removeFromBottom(35);
+    controlsArea.removeFromLeft(30);
+    controlsArea.removeFromRight(30);
+    controlsArea.reduce(15, 10);
+
+    // Spectrum takes 170 + 20 gap
+    controlsArea.removeFromTop(190);
+
+    // Now we are at the top of the knob rows
+    float rowHeight = 85.0f;
+    float rowGap = 15.0f;
+    float horizontalLineY = controlsArea.getY() + rowHeight + rowGap * 0.5f;
+
+    // Horizontal Line
+    juce::Colour hColorCenter = palette.accentBright.withAlpha(0.6f);
+    juce::Colour hColorEdge = palette.accentMid.withAlpha(0.0f);
+
+    juce::ColourGradient hGrad(hColorCenter, controlsArea.getCentreX(), horizontalLineY,
+                               hColorEdge, controlsArea.getX(), horizontalLineY, true);
+    hGrad.addColour(0.0, hColorCenter);
+    hGrad.addColour(1.0, hColorEdge);
+
+    g.setGradientFill(hGrad);
+    g.fillRect(controlsArea.getX(), horizontalLineY - 1.0f, controlsArea.getWidth(), 2.0f);
+
+    // Vertical Lines
+    float colWidth = controlsArea.getWidth() / 4.0f;
+    float verticalLineTop = controlsArea.getY();
+    float verticalLineBottom = controlsArea.getY() + rowHeight * 2.0f + rowGap;
+
+    juce::Colour vColorCenter = palette.accentMid.withAlpha(0.5f);
+    juce::Colour vColorEdge = palette.accentMid.withAlpha(0.0f);
+
+    for (int i = 1; i <= 3; ++i)
+    {
+        float x = controlsArea.getX() + colWidth * i;
+
+        juce::ColourGradient vGrad(vColorCenter, x, (verticalLineTop + verticalLineBottom) * 0.5f,
+                                   vColorEdge, x, verticalLineTop, true);
+        vGrad.addColour(0.0, vColorCenter);
+        vGrad.addColour(1.0, vColorEdge);
+
+        g.setGradientFill(vGrad);
+        g.fillRect(x - 1.0f, verticalLineTop, 2.0f, verticalLineBottom - verticalLineTop);
+    }
+
     drawSideRails(g);
     drawHeader(g);
     drawFooter(g);
