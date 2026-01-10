@@ -1,7 +1,7 @@
 /*
   ==============================================================================
     
-    SirenX - Convolution Reverb Plugin
+    SirenX - Algorithmic Reverb Plugin
     Solar Productions
     
     PluginProcessor.h - Audio processing and parameter management
@@ -18,7 +18,7 @@
 
 //==============================================================================
 class SirenXAudioProcessor : public juce::AudioProcessor,
-                                 public juce::AudioProcessorValueTreeState::Listener
+                             public juce::AudioProcessorValueTreeState::Listener
 {
 public:
     //==============================================================================
@@ -59,49 +59,56 @@ public:
     //==============================================================================
     void parameterChanged(const juce::String& parameterID, float newValue) override;
     
-    // Parameter tree
     juce::AudioProcessorValueTreeState& getAPVTS() { return apvts; }
     
-    // Get waveform data for visualization
     float getInputLevel() const { return inputLevel.load(); }
     float getOutputLevel() const { return outputLevel.load(); }
     
-    // Audio Capture for Visualization
-    static constexpr int fftSize = 4096;
+    // Optimized FIFO for visualization
+    static constexpr int fftSize = 2048;
 
-    // Simple lock-free queue for audio samples
     struct AudioFifo
     {
         void push(float input, float wet)
         {
-            inputBuffer[writeIndex] = input;
-            wetBuffer[writeIndex] = wet;
-            writeIndex = (writeIndex + 1) % bufferSize;
+            int idx = writeIndex.load();
+            inputBuffer[idx] = input;
+            wetBuffer[idx] = wet;
+            writeIndex = (idx + 1) % bufferSize;
         }
 
         bool pull(std::vector<float>& inputBlock, std::vector<float>& wetBlock, int numSamples)
         {
+            if (numSamples > bufferSize) numSamples = bufferSize;
+            if (static_cast<size_t>(numSamples) > inputBlock.size()) return false;
+            if (static_cast<size_t>(numSamples) > wetBlock.size()) return false;
+            
             int currentWrite = writeIndex.load();
             int startRead = (currentWrite - numSamples + bufferSize) % bufferSize;
 
             for (int i = 0; i < numSamples; ++i)
             {
                 int idx = (startRead + i) % bufferSize;
-                inputBlock[static_cast<size_t>(i)] = inputBuffer[static_cast<size_t>(idx)];
-                wetBlock[static_cast<size_t>(i)] = wetBuffer[static_cast<size_t>(idx)];
+                inputBlock[static_cast<size_t>(i)] = inputBuffer[idx].load();
+                wetBlock[static_cast<size_t>(i)] = wetBuffer[idx].load();
             }
             return true;
         }
 
-        static constexpr int bufferSize = 4096;
-        std::array<std::atomic<float>, bufferSize> inputBuffer;
-        std::array<std::atomic<float>, bufferSize> wetBuffer;
+        static constexpr int bufferSize = 4096; // Increased for 2048 FFT
+        std::array<std::atomic<float>, bufferSize> inputBuffer {};
+        std::array<std::atomic<float>, bufferSize> wetBuffer {};
         std::atomic<int> writeIndex { 0 };
     };
 
+    // Reverb character types (Pro-R2 style)
+    enum class ReverbCharacter { Plate = 0, Vintage = 1, Modern = 2 };
+    
+    void setCharacter(ReverbCharacter character);
+    ReverbCharacter getCharacter() const { return currentCharacter; }
+
     AudioFifo audioFifo;
 
-    // Helpers
     double getBPM() const { return currentBPM; }
 
 private:
@@ -111,12 +118,13 @@ private:
     ReverbEngine reverbEngine;
     juce::AudioProcessorValueTreeState apvts;
     
-    juce::AudioBuffer<float> tempInputBuffer; // For visualizer
+    juce::AudioBuffer<float> tempInputBuffer;
 
     std::atomic<float> inputLevel { 0.0f };
     std::atomic<float> outputLevel { 0.0f };
     
     double currentBPM = 120.0;
+    ReverbCharacter currentCharacter = ReverbCharacter::Modern;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SirenXAudioProcessor)
 };

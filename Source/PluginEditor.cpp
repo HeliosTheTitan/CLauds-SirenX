@@ -1,10 +1,10 @@
 /*
   ==============================================================================
     
-    SirenX - Convolution Reverb Plugin
+    SirenX - Algorithmic Reverb Plugin
     Solar Productions
     
-    PluginEditor.cpp - Main UI implementation
+    PluginEditor.cpp - Main UI implementation (Optimized)
     
   ==============================================================================
 */
@@ -12,22 +12,22 @@
 #include "PluginEditor.h"
 
 //==============================================================================
-// Spectrum Display Implementation
+// Spectrum Display Implementation (Optimized)
 //==============================================================================
 SpectrumDisplay::SpectrumDisplay(SirenXAudioProcessor& processor)
     : audioProcessor(processor),
-      fft(12), // 2^12 = 4096
-      window(4096, juce::dsp::WindowingFunction<float>::hann)
+      fft(fftOrder), // 2^11 = 2048
+      window(fftSize, juce::dsp::WindowingFunction<float>::hann)
 {
-    inputTimeData.resize(4096);
-    wetTimeData.resize(4096);
-    inputFrequencyData.resize(8192); // FFT size * 2
-    wetFrequencyData.resize(8192);
-    inputSmoothedSpectrum.resize(2048, 0.0f); // Nyquist bins
-    wetSmoothedSpectrum.resize(2048, 0.0f);
-    xCoords.resize(2048, 0.0f);
+    inputTimeData.resize(fftSize, 0.0f);
+    wetTimeData.resize(fftSize, 0.0f);
+    inputFrequencyData.resize(fftSize * 2, 0.0f);
+    wetFrequencyData.resize(fftSize * 2, 0.0f);
+    inputSmoothedSpectrum.resize(numBins, 0.0f);
+    wetSmoothedSpectrum.resize(numBins, 0.0f);
+    xCoords.resize(numBins, 0.0f);
 
-    startTimerHz(30);
+    // Don't start timer until component is ready
 }
 
 SpectrumDisplay::~SpectrumDisplay()
@@ -44,13 +44,14 @@ void SpectrumDisplay::setPalette(const SirenXPalette& palette)
 void SpectrumDisplay::recalculateXCoords()
 {
     auto bounds = getLocalBounds().toFloat();
+    if (bounds.isEmpty()) return;
+    
     double sampleRate = audioProcessor.getSampleRate();
     if (sampleRate <= 0.0) sampleRate = 44100.0;
 
-    // Pre-calculate X coordinates for all bins
-    for (size_t i = 0; i < xCoords.size(); ++i)
+    for (size_t i = 0; i < numBins && i < xCoords.size(); ++i)
     {
-        float freq = (float)i * (float)sampleRate / 4096.0f;
+        float freq = static_cast<float>(i) * static_cast<float>(sampleRate) / static_cast<float>(fftSize);
         if (freq < 20.0f)
         {
             xCoords[i] = bounds.getX();
@@ -65,23 +66,23 @@ void SpectrumDisplay::recalculateXCoords()
             xCoords[i] = bounds.getX() + normX * bounds.getWidth();
         }
     }
+    
+    initialized = true;
 }
 
 void SpectrumDisplay::performFFT(const std::vector<float>& timeDomain, std::vector<float>& frequencyDomain)
 {
+    if (timeDomain.size() < fftSize || frequencyDomain.size() < fftSize * 2)
+        return;
+        
     std::fill(frequencyDomain.begin(), frequencyDomain.end(), 0.0f);
 
-    // Copy time domain data to frequency domain buffer for processing
-    // We use 4096 samples
-    for (size_t i = 0; i < timeDomain.size() && i < 4096; ++i)
+    for (size_t i = 0; i < fftSize; ++i)
     {
         frequencyDomain[i] = timeDomain[i];
     }
 
-    // Apply windowing
-    window.multiplyWithWindowingTable(frequencyDomain.data(), 4096);
-
-    // Perform FFT
+    window.multiplyWithWindowingTable(frequencyDomain.data(), fftSize);
     fft.performFrequencyOnlyForwardTransform(frequencyDomain.data());
 }
 
@@ -89,14 +90,11 @@ void SpectrumDisplay::paint(juce::Graphics& g)
 {
     auto bounds = getLocalBounds().toFloat();
     
-    // Background
     g.setColour(currentPalette.backgroundDark);
     g.fillRoundedRectangle(bounds, 4.0f);
     
-    // Grid lines
     g.setColour(currentPalette.metalBlue.withAlpha(0.3f));
 
-    // Vertical log-scale grid
     float freqs[] = { 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000, 20000 };
 
     if (auto* lnf = dynamic_cast<SirenXLookAndFeel*>(&getLookAndFeel()))
@@ -113,20 +111,18 @@ void SpectrumDisplay::paint(juce::Graphics& g)
             g.setColour(currentPalette.metalBlue.withAlpha(0.3f));
             g.drawVerticalLine(static_cast<int>(x), bounds.getY(), bounds.getBottom());
 
-            // Frequency label
             g.setColour(currentPalette.textDim);
             juce::String labelText;
             if (f >= 1000.0f) labelText = juce::String(f / 1000.0f, 0) + "k";
             else labelText = juce::String((int)f);
 
-            // Adjust justification to prevent cutoff
             juce::Justification justification = juce::Justification::centred;
             int xOffset = -15;
 
             if (f == 20.0f)
             {
                 justification = juce::Justification::left;
-                xOffset = 2; // Slight padding
+                xOffset = 2;
             }
             else if (f == 20000.0f)
             {
@@ -138,24 +134,18 @@ void SpectrumDisplay::paint(juce::Graphics& g)
         }
     }
 
-    // Horizontal dB grid (optional, simplistic)
     g.drawHorizontalLine(static_cast<int>(bounds.getCentreY()), bounds.getX(), bounds.getRight());
 
-    // Draw Spectrums
-    // Use dynamic colors from current palette
     juce::Colour inputColor = currentPalette.accentMid;
     juce::Colour wetColor = currentPalette.accentBright;
 
-    // Draw Wet (Ghost) first
     drawSpectrum(g, wetSmoothedSpectrum, wetColor, 0.4f);
-
-    // Draw Input (Solid)
     drawSpectrum(g, inputSmoothedSpectrum, inputColor, 0.9f);
 
-    // === Filter Indicators ===
+    // Filter Indicators
     auto& apvts = audioProcessor.getAPVTS();
-    float hpFreq = *apvts.getRawParameterValue("lowCut"); // Low Cut = High Pass
-    float lpFreq = *apvts.getRawParameterValue("highCut"); // High Cut = Low Pass
+    float hpFreq = *apvts.getRawParameterValue("lowCut");
+    float lpFreq = *apvts.getRawParameterValue("highCut");
 
     float hpNorm = std::log10(hpFreq / 20.0f) / std::log10(20000.0f / 20.0f);
     float lpNorm = std::log10(lpFreq / 20.0f) / std::log10(20000.0f / 20.0f);
@@ -170,7 +160,6 @@ void SpectrumDisplay::paint(juce::Graphics& g)
 
     juce::Colour textColor = currentPalette.textDim;
 
-    // Shade Low Cut Area (High Pass)
     if (hpX > bounds.getX())
     {
         g.setColour(juce::Colours::black.withAlpha(0.5f));
@@ -178,14 +167,12 @@ void SpectrumDisplay::paint(juce::Graphics& g)
         g.setColour(textColor);
         g.drawVerticalLine(static_cast<int>(hpX), bounds.getY(), bounds.getBottom());
 
-        // HP Frequency Label
         juce::String labelText;
         if (hpFreq >= 1000.0f) labelText = juce::String(hpFreq / 1000.0f, 1) + "k";
         else labelText = juce::String((int)hpFreq);
         g.drawText(labelText, static_cast<int>(hpX) + 5, static_cast<int>(bounds.getBottom()) - 25, 40, 15, juce::Justification::left);
     }
 
-    // Shade High Cut Area (Low Pass)
     if (lpX < bounds.getRight())
     {
         g.setColour(juce::Colours::black.withAlpha(0.5f));
@@ -193,45 +180,40 @@ void SpectrumDisplay::paint(juce::Graphics& g)
         g.setColour(textColor);
         g.drawVerticalLine(static_cast<int>(lpX), bounds.getY(), bounds.getBottom());
 
-        // LP Frequency Label
         juce::String labelText;
         if (lpFreq >= 1000.0f) labelText = juce::String(lpFreq / 1000.0f, 1) + "k";
         else labelText = juce::String((int)lpFreq);
         g.drawText(labelText, static_cast<int>(lpX) - 45, static_cast<int>(bounds.getBottom()) - 25, 40, 15, juce::Justification::right);
     }
 
-    // Border
     g.setColour(currentPalette.metalBlueBright.withAlpha(0.5f));
     g.drawRoundedRectangle(bounds.reduced(1.0f), 4.0f, 1.0f);
 }
 
 void SpectrumDisplay::drawSpectrum(juce::Graphics& g, const std::vector<float>& spectrum, juce::Colour color, float alpha)
 {
-    if (spectrum.empty() || xCoords.size() != 2048) return;
+    if (!initialized || spectrum.size() < numBins || xCoords.size() < numBins) 
+        return;
 
     auto bounds = getLocalBounds().toFloat();
+    if (bounds.isEmpty()) return;
+    
     juce::Path path;
     bool started = false;
     float lastX = -10.0f;
 
-    // FFT size is 4096, output is 2048 bins (Frequency only)
-    int numBins = 2048;
-
-    for (int i = 0; i < numBins; ++i)
+    for (size_t i = 0; i < numBins; ++i)
     {
         float x = xCoords[i];
 
-        // Skip if outside bounds or if this pixel column already has a point (decimation)
         if (x < bounds.getX()) continue;
         if (x > bounds.getRight()) break;
-        if (std::abs(x - lastX) < 0.5f) continue;
+        if (std::abs(x - lastX) < 1.0f) continue;
         lastX = x;
 
-        float magnitude = spectrum[static_cast<size_t>(i)];
-        // Convert to dB
-        float db = juce::Decibels::gainToDecibels(magnitude) - juce::Decibels::gainToDecibels((float)4096);
+        float magnitude = spectrum[i];
+        float db = juce::Decibels::gainToDecibels(magnitude + 1e-10f) - juce::Decibels::gainToDecibels(static_cast<float>(fftSize));
 
-        // Scale to height: range -100dB to 0dB
         float normY = juce::jmap(db, -100.0f, 0.0f, 0.0f, 1.0f);
         float y = bounds.getBottom() - normY * bounds.getHeight();
         
@@ -262,24 +244,31 @@ void SpectrumDisplay::drawSpectrum(juce::Graphics& g, const std::vector<float>& 
 void SpectrumDisplay::resized()
 {
     recalculateXCoords();
+    
+    // Start timer only after first resize (when component has valid bounds)
+    if (!isTimerRunning() && getWidth() > 0 && getHeight() > 0)
+        startTimerHz(24);
 }
 
 void SpectrumDisplay::timerCallback()
 {
-    // Pull audio from FIFO
-    // audioProcessor.audioFifo is public
-    audioProcessor.audioFifo.pull(inputTimeData, wetTimeData, 4096);
+    if (!initialized) return;
     
-    // Calculate FFT
-    performFFT(inputTimeData, inputFrequencyData);
-    performFFT(wetTimeData, wetFrequencyData);
-    
-    // Apply smoothing (slower decay)
-    float decay = 0.85f;
-    for (size_t i = 0; i < 2048; ++i)
+    // Safe pull from FIFO
+    if (inputTimeData.size() >= fftSize && wetTimeData.size() >= fftSize)
     {
-        inputSmoothedSpectrum[i] = std::max(inputFrequencyData[i], inputSmoothedSpectrum[i] * decay);
-        wetSmoothedSpectrum[i] = std::max(wetFrequencyData[i], wetSmoothedSpectrum[i] * decay);
+        audioProcessor.audioFifo.pull(inputTimeData, wetTimeData, static_cast<int>(fftSize));
+        
+        performFFT(inputTimeData, inputFrequencyData);
+        performFFT(wetTimeData, wetFrequencyData);
+        
+        // Apply smoothing with bounds check
+        float decay = 0.8f;
+        for (size_t i = 0; i < numBins && i < inputSmoothedSpectrum.size() && i < inputFrequencyData.size(); ++i)
+        {
+            inputSmoothedSpectrum[i] = std::max(inputFrequencyData[i], inputSmoothedSpectrum[i] * decay);
+            wetSmoothedSpectrum[i] = std::max(wetFrequencyData[i], wetSmoothedSpectrum[i] * decay);
+        }
     }
 
     repaint();
@@ -304,7 +293,6 @@ SirenXKnob::SirenXKnob(const juce::String& labelText, const juce::String& suffix
     valueLabel.setColour(juce::Label::textColourId, SirenXColors::textBright);
     addAndMakeVisible(valueLabel);
     
-    // Update value label when slider changes
     slider.onValueChange = [this]()
     {
         juce::String text;
@@ -358,19 +346,45 @@ SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
 {
     setLookAndFeel(&lookAndFeel);
     
-    // Create spectrum display
     spectrumDisplay = std::make_unique<SpectrumDisplay>(audioProcessor);
     addAndMakeVisible(*spectrumDisplay);
     
-    // Add all knobs
     addAndMakeVisible(decayKnob);
     addAndMakeVisible(preDelayKnob);
     addAndMakeVisible(sizeKnob);
     addAndMakeVisible(mixKnob);
     addAndMakeVisible(widthKnob);
-    addAndMakeVisible(highCutKnob);
-    addAndMakeVisible(lowCutKnob);
-    addAndMakeVisible(duckingKnob); // Added Ducking Knob
+    addAndMakeVisible(highPassKnob);
+    addAndMakeVisible(lowPassKnob);
+    addAndMakeVisible(duckingKnob);
+
+    // Character buttons setup
+    auto setupCharacterButton = [this](juce::TextButton& button, const juce::String& tooltip) {
+        button.setClickingTogglesState(false);
+        button.setColour(juce::TextButton::buttonColourId, SirenXColors::metalBlue);
+        button.setColour(juce::TextButton::buttonOnColourId, SirenXColors::accent);
+        button.setColour(juce::TextButton::textColourOffId, SirenXColors::textDim);
+        button.setColour(juce::TextButton::textColourOnId, SirenXColors::textBright);
+        button.setTooltip(tooltip);
+        addAndMakeVisible(button);
+    };
+    
+    setupCharacterButton(plateButton, "Plate: Bright, dense, fast diffusion with metallic shimmer");
+    setupCharacterButton(vintageButton, "Vintage: Warm, colored, modulated classic character");
+    setupCharacterButton(modernButton, "Modern: Clean, transparent, smooth neutral response");
+    
+    plateButton.onClick = [this] { 
+        audioProcessor.setCharacter(SirenXAudioProcessor::ReverbCharacter::Plate);
+        updateCharacterButtons();
+    };
+    vintageButton.onClick = [this] { 
+        audioProcessor.setCharacter(SirenXAudioProcessor::ReverbCharacter::Vintage);
+        updateCharacterButtons();
+    };
+    modernButton.onClick = [this] { 
+        audioProcessor.setCharacter(SirenXAudioProcessor::ReverbCharacter::Modern);
+        updateCharacterButtons();
+    };
 
     tooltipToggle.setColour(juce::ToggleButton::textColourId, SirenXColors::textDim);
     tooltipToggle.setColour(juce::ToggleButton::tickColourId, SirenXColors::accentBright);
@@ -383,10 +397,8 @@ SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
     };
     addAndMakeVisible(tooltipToggle);
 
-    // Initialize Tooltip Window
     tooltipWindow = std::make_unique<juce::TooltipWindow>(this, 700);
     
-    // Create parameter attachments
     auto& apvts = audioProcessor.getAPVTS();
     
     decayAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
@@ -399,26 +411,27 @@ SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
         apvts, "mix", mixKnob.getSlider());
     widthAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "stereoWidth", widthKnob.getSlider());
-    highCutAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        apvts, "highCut", highCutKnob.getSlider());
-    lowCutAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        apvts, "lowCut", lowCutKnob.getSlider());
+    highPassAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        apvts, "lowCut", highPassKnob.getSlider());
+    lowPassAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        apvts, "highCut", lowPassKnob.getSlider());
     duckingAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "ducking", duckingKnob.getSlider());
     
-    // Tooltips
-    decayKnob.getSlider().setTooltip("Sets the reverb decay time.");
-    preDelayKnob.getSlider().setTooltip("Sets the initial delay before reverb starts.");
-    sizeKnob.getSlider().setTooltip("Controls the size/density of the reverb.");
-    mixKnob.getSlider().setTooltip("Blends between the dry and wet signal.");
-    widthKnob.getSlider().setTooltip("Adjusts the stereo width.");
-    highCutKnob.getSlider().setTooltip("Cuts high frequencies from the reverb.");
-    lowCutKnob.getSlider().setTooltip("Cuts low frequencies from the reverb.");
-    duckingKnob.getSlider().setTooltip("Compresses the reverb tail when input signal is present.");
-    tooltipToggle.setTooltip("Toggle tooltips on/off.");
+    decayKnob.getSlider().setTooltip("Controls reverb tail length (0.1s - 30s)");
+    preDelayKnob.getSlider().setTooltip("Initial delay before reverb (0 - 500ms)");
+    sizeKnob.getSlider().setTooltip("Room size / density of reflections");
+    mixKnob.getSlider().setTooltip("Dry/Wet blend");
+    widthKnob.getSlider().setTooltip("Stereo width (0% mono, 100% normal, 200% wide)");
+    highPassKnob.getSlider().setTooltip("High-pass filter on reverb (cuts low frequencies)");
+    lowPassKnob.getSlider().setTooltip("Low-pass filter on reverb (cuts high frequencies)");
+    duckingKnob.getSlider().setTooltip("Reduces reverb when input signal is present");
+    tooltipToggle.setTooltip("Toggle tooltips on/off");
 
-    // Set size - matching Solar Productions style
-    setSize(750, 520);
+    // Initialize character button states
+    updateCharacterButtons();
+
+    setSize(750, 560); // Slightly taller to fit buttons
 
     startTimerHz(10);
 }
@@ -431,12 +444,40 @@ SirenXAudioProcessorEditor::~SirenXAudioProcessorEditor()
 
 void SirenXAudioProcessorEditor::timerCallback()
 {
+    // Update character button states periodically in case parameter changed externally
+    updateCharacterButtons();
+}
+
+void SirenXAudioProcessorEditor::updateCharacterButtons()
+{
+    auto character = audioProcessor.getCharacter();
+    auto palette = lookAndFeel.getPalette();
+    
+    auto setButtonState = [&palette](juce::TextButton& button, bool isSelected) {
+        if (isSelected)
+        {
+            button.setColour(juce::TextButton::buttonColourId, palette.accentMid);
+            button.setColour(juce::TextButton::textColourOffId, palette.textBright);
+        }
+        else
+        {
+            button.setColour(juce::TextButton::buttonColourId, palette.metalBlue);
+            button.setColour(juce::TextButton::textColourOffId, palette.textDim);
+        }
+    };
+    
+    setButtonState(plateButton, character == SirenXAudioProcessor::ReverbCharacter::Plate);
+    setButtonState(vintageButton, character == SirenXAudioProcessor::ReverbCharacter::Vintage);
+    setButtonState(modernButton, character == SirenXAudioProcessor::ReverbCharacter::Modern);
+    
+    plateButton.repaint();
+    vintageButton.repaint();
+    modernButton.repaint();
 }
 
 //==============================================================================
 void SirenXAudioProcessorEditor::paint(juce::Graphics& g)
 {
-    // Draw cached background
     if (cachedBackground.isValid())
         g.drawImageAt(cachedBackground, 0, 0);
     else
@@ -448,7 +489,6 @@ void SirenXAudioProcessorEditor::drawBackground(juce::Graphics& g)
     auto bounds = getLocalBounds().toFloat();
     auto palette = lookAndFeel.getPalette();
     
-    // Main background gradient
     juce::ColourGradient bgGradient(
         palette.backgroundDark,
         bounds.getX(), bounds.getY(),
@@ -458,7 +498,6 @@ void SirenXAudioProcessorEditor::drawBackground(juce::Graphics& g)
     g.setGradientFill(bgGradient);
     g.fillRect(bounds);
     
-    // Brushed metal texture effect
     juce::Random random(42);
     g.setColour(juce::Colours::white.withAlpha(0.015f));
     for (int i = 0; i < 200; ++i)
@@ -469,7 +508,6 @@ void SirenXAudioProcessorEditor::drawBackground(juce::Graphics& g)
         g.drawLine(x, y, x + len, y + random.nextFloat() * 2.0f - 1.0f, 0.5f);
     }
 
-    // Draw static parts of rails, header, footer
     drawSideRails(g);
     drawHeader(g);
     drawFooter(g);
@@ -481,7 +519,6 @@ void SirenXAudioProcessorEditor::drawHeader(juce::Graphics& g)
     auto headerBounds = bounds.removeFromTop(50).toFloat();
     auto palette = lookAndFeel.getPalette();
     
-    // Header gradient bar
     juce::ColourGradient headerGradient(
         palette.steelDark,
         headerBounds.getX(), headerBounds.getY(),
@@ -491,12 +528,10 @@ void SirenXAudioProcessorEditor::drawHeader(juce::Graphics& g)
     g.setGradientFill(headerGradient);
     g.fillRect(headerBounds.withLeft(30.0f).withRight(headerBounds.getRight() - 30.0f));
     
-    // Glow line at bottom of header
     g.setColour(palette.accentBright);
     g.fillRect(headerBounds.withLeft(30.0f).withRight(headerBounds.getRight() - 30.0f)
                .removeFromBottom(2.0f));
     
-    // Title
     juce::Font titleFont = lookAndFeel.getConsolasFont(28.0f, true);
     
     g.setFont(titleFont);
@@ -530,7 +565,6 @@ void SirenXAudioProcessorEditor::drawFooter(juce::Graphics& g)
     auto footerBounds = bounds.removeFromBottom(35).toFloat();
     auto palette = lookAndFeel.getPalette();
     
-    // Footer gradient bar
     juce::ColourGradient footerGradient(
         palette.steelLight,
         footerBounds.getX(), footerBounds.getY(),
@@ -540,12 +574,10 @@ void SirenXAudioProcessorEditor::drawFooter(juce::Graphics& g)
     g.setGradientFill(footerGradient);
     g.fillRect(footerBounds.withLeft(30.0f).withRight(footerBounds.getRight() - 30.0f));
     
-    // Glow line at top of footer
     g.setColour(palette.accentBright);
     g.fillRect(footerBounds.withLeft(30.0f).withRight(footerBounds.getRight() - 30.0f)
                .removeFromTop(2.0f));
     
-    // "SOLAR" in accent, "PRODUCTIONS" in white
     juce::Font footerFont = lookAndFeel.getConsolasFont(12.0f, true);
     g.setFont(footerFont);
     
@@ -578,7 +610,6 @@ void SirenXAudioProcessorEditor::drawSideRails(juce::Graphics& g)
     float railWidth = 30.0f;
     auto palette = lookAndFeel.getPalette();
     
-    // Left rail
     auto leftRail = bounds.removeFromLeft(static_cast<int>(railWidth)).toFloat();
     juce::ColourGradient leftGradient(
         palette.steelLight,
@@ -589,7 +620,6 @@ void SirenXAudioProcessorEditor::drawSideRails(juce::Graphics& g)
     g.setGradientFill(leftGradient);
     g.fillRect(leftRail);
     
-    // Right rail
     bounds = getLocalBounds();
     auto rightRail = bounds.removeFromRight(static_cast<int>(railWidth)).toFloat();
     juce::ColourGradient rightGradient(
@@ -601,14 +631,12 @@ void SirenXAudioProcessorEditor::drawSideRails(juce::Graphics& g)
     g.setGradientFill(rightGradient);
     g.fillRect(rightRail);
     
-    // Screws on left rail
     float screwSize = 8.0f;
     float screwX = leftRail.getCentreX();
     drawScrew(g, screwX, 70.0f, screwSize);
     drawScrew(g, screwX, getHeight() / 2.0f, screwSize);
     drawScrew(g, screwX, getHeight() - 70.0f, screwSize);
     
-    // Screws on right rail
     screwX = rightRail.getCentreX();
     drawScrew(g, screwX, 70.0f, screwSize);
     drawScrew(g, screwX, getHeight() / 2.0f, screwSize);
@@ -619,15 +647,12 @@ void SirenXAudioProcessorEditor::drawScrew(juce::Graphics& g, float x, float y, 
 {
     auto palette = lookAndFeel.getPalette();
 
-    // Screw base
     g.setColour(palette.steelDark);
     g.fillEllipse(x - size / 2.0f, y - size / 2.0f, size, size);
     
-    // Highlight
     g.setColour(palette.screwHighlight);
     g.fillEllipse(x - size / 2.0f + 1.0f, y - size / 2.0f + 1.0f, size * 0.6f, size * 0.6f);
     
-    // Cross slot
     g.setColour(palette.backgroundDark);
     float slotWidth = size * 0.15f;
     float slotLength = size * 0.7f;
@@ -642,7 +667,6 @@ void SirenXAudioProcessorEditor::resized()
 
     tooltipToggle.setBounds(headerBounds.removeFromLeft(120).withTrimmedLeft(35).reduced(0, 15).withWidth(80));
 
-    // Create cached background
     if (getWidth() > 0 && getHeight() > 0)
     {
         cachedBackground = juce::Image(juce::Image::ARGB, getWidth(), getHeight(), true);
@@ -650,25 +674,20 @@ void SirenXAudioProcessorEditor::resized()
         drawBackground(g);
     }
     
-    // Account for rails
     auto railLeft = bounds.removeFromLeft(30);
     bounds.removeFromRight(30);
     bounds.removeFromBottom(35);
     
-    // Inner padding
     bounds.reduce(15, 10);
     auto faceplateArea = bounds;
     
-    // Spectrum display at top (Pro-R style) - Larger
-    spectrumDisplay->setBounds(faceplateArea.removeFromTop(180).reduced(0, 5));
+    spectrumDisplay->setBounds(faceplateArea.removeFromTop(170).reduced(0, 5));
     
-    faceplateArea.removeFromTop(25);
+    faceplateArea.removeFromTop(20);
     
-    // Controls
-    // Let's layout knobs in a nice arc or 2 rows
     auto mainControls = faceplateArea;
     int knobWidth = mainControls.getWidth() / 4;
-    int knobHeight = 90;
+    int knobHeight = 85;
 
     auto row1 = mainControls.removeFromTop(knobHeight);
     decayKnob.setBounds(row1.removeFromLeft(knobWidth));
@@ -676,12 +695,25 @@ void SirenXAudioProcessorEditor::resized()
     sizeKnob.setBounds(row1.removeFromLeft(knobWidth));
     mixKnob.setBounds(row1.removeFromLeft(knobWidth));
 
-    mainControls.removeFromTop(20);
+    mainControls.removeFromTop(15);
 
     auto row2 = mainControls.removeFromTop(knobHeight);
-    // 4 knobs on bottom row now
     widthKnob.setBounds(row2.removeFromLeft(knobWidth));
-    highCutKnob.setBounds(row2.removeFromLeft(knobWidth));
-    lowCutKnob.setBounds(row2.removeFromLeft(knobWidth));
+    highPassKnob.setBounds(row2.removeFromLeft(knobWidth));
+    lowPassKnob.setBounds(row2.removeFromLeft(knobWidth));
     duckingKnob.setBounds(row2.removeFromLeft(knobWidth));
+
+    // Character buttons row
+    mainControls.removeFromTop(15);
+    auto buttonRow = mainControls.removeFromTop(28);
+    int buttonWidth = 100;
+    int totalButtonWidth = buttonWidth * 3 + 20; // 3 buttons + spacing
+    int buttonStartX = (buttonRow.getWidth() - totalButtonWidth) / 2;
+    
+    buttonRow.removeFromLeft(buttonStartX);
+    plateButton.setBounds(buttonRow.removeFromLeft(buttonWidth));
+    buttonRow.removeFromLeft(10);
+    vintageButton.setBounds(buttonRow.removeFromLeft(buttonWidth));
+    buttonRow.removeFromLeft(10);
+    modernButton.setBounds(buttonRow.removeFromLeft(buttonWidth));
 }

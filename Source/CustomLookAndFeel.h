@@ -1,7 +1,7 @@
 /*
   ==============================================================================
     
-    SirenX - Convolution Reverb Plugin
+    SirenX - Algorithmic Reverb Plugin
     Solar Productions
     
     CustomLookAndFeel.h - Neon Blue Theme
@@ -43,10 +43,10 @@ struct SirenXPalette
     static SirenXPalette getNeonBlue()
     {
         return {
-            juce::Colour(0xFF050510), juce::Colour(0xFF0F1224), juce::Colour(0xFF1A2235), // Very dark blue/black
+            juce::Colour(0xFF050510), juce::Colour(0xFF0F1224), juce::Colour(0xFF1A2235),
             juce::Colour(0xFF203050), juce::Colour(0xFF304060),
 
-            juce::Colour(0xFF004080), juce::Colour(0xFF0080FF), juce::Colour(0xFF40A0FF), juce::Colour(0xFF80C0FF), // Neon Blue / Cyan
+            juce::Colour(0xFF004080), juce::Colour(0xFF0080FF), juce::Colour(0xFF40A0FF), juce::Colour(0xFF80C0FF),
 
             juce::Colour(0xFFE0F0FF), juce::Colour(0xFF8090A0),
 
@@ -102,22 +102,18 @@ public:
     void setPalette(const SirenXPalette& newPalette);
     const SirenXPalette& getPalette() const { return palette; }
 
-    // Rotary slider (knob) drawing
     void drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,
                           float sliderPosProportional, float rotaryStartAngle,
                           float rotaryEndAngle, juce::Slider& slider) override;
     
-    // Linear slider drawing
     void drawLinearSlider(juce::Graphics& g, int x, int y, int width, int height,
                           float sliderPos, float minSliderPos, float maxSliderPos,
                           const juce::Slider::SliderStyle style, juce::Slider& slider) override;
     
-    // Toggle button drawing
     void drawToggleButton(juce::Graphics& g, juce::ToggleButton& button,
                           bool shouldDrawButtonAsHighlighted, 
                           bool shouldDrawButtonAsDown) override;
     
-    // ComboBox drawing
     void drawComboBox(juce::Graphics& g, int width, int height, bool isButtonDown,
                       int buttonX, int buttonY, int buttonW, int buttonH,
                       juce::ComboBox& box) override;
@@ -128,18 +124,14 @@ public:
                            const juce::String& text, const juce::String& shortcutKeyText,
                            const juce::Drawable* icon, const juce::Colour* textColour) override;
 
-    // Tooltip
     juce::Rectangle<int> getTooltipBounds(const juce::String& tipText, juce::Point<int> screenPos,
                                           juce::Rectangle<int> parentArea) override;
     void drawTooltip(juce::Graphics& g, const juce::String& text, int width, int height) override;
     
-    // Label
     void drawLabel(juce::Graphics& g, juce::Label& label) override;
     
-    // Font
     juce::Font getLabelFont(juce::Label& label) override;
     
-    // Get Consolas font with kerning
     juce::Font getConsolasFont(float height, bool bold = false);
     
 private:

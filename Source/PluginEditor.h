@@ -1,7 +1,7 @@
 /*
   ==============================================================================
     
-    SirenX - Convolution Reverb Plugin
+    SirenX - Algorithmic Reverb Plugin
     Solar Productions
     
     PluginEditor.h - Main UI with spectrum display
@@ -16,7 +16,7 @@
 #include "CustomLookAndFeel.h"
 
 //==============================================================================
-// Spectrum Display Component
+// Spectrum Display Component (Optimized)
 //==============================================================================
 class SpectrumDisplay : public juce::Component, public juce::Timer
 {
@@ -37,6 +37,11 @@ private:
     SirenXAudioProcessor& audioProcessor;
     SirenXPalette currentPalette = SirenXPalette::getNeonBlue();
     
+    // FFT constants - 2048 point FFT for smoother spectrum
+    static constexpr size_t fftOrder = 11;        // 2^11 = 2048
+    static constexpr size_t fftSize = 2048;
+    static constexpr size_t numBins = 1024;       // fftSize / 2
+    
     juce::dsp::FFT fft;
     juce::dsp::WindowingFunction<float> window;
 
@@ -49,6 +54,8 @@ private:
 
     std::vector<float> xCoords;
     void recalculateXCoords();
+    
+    bool initialized = false;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SpectrumDisplay)
 };
@@ -82,7 +89,7 @@ private:
 // Main Editor
 //==============================================================================
 class SirenXAudioProcessorEditor : public juce::AudioProcessorEditor,
-                                       public juce::Timer
+                                   public juce::Timer
 {
 public:
     SirenXAudioProcessorEditor(SirenXAudioProcessor&);
@@ -98,35 +105,38 @@ private:
     void drawFooter(juce::Graphics& g);
     void drawSideRails(juce::Graphics& g);
     void drawScrew(juce::Graphics& g, float x, float y, float size);
+    void updateCharacterButtons();
     
     SirenXAudioProcessor& audioProcessor;
     SirenXLookAndFeel lookAndFeel;
     
-    // Spectrum display
     std::unique_ptr<SpectrumDisplay> spectrumDisplay;
     
-    // Controls
     SirenXKnob decayKnob      { "DECAY", "s" };
     SirenXKnob preDelayKnob   { "PRE-DELAY", "ms" };
     SirenXKnob sizeKnob       { "SIZE", "%" };
     SirenXKnob mixKnob        { "MIX", "%" };
     
     SirenXKnob widthKnob      { "WIDTH", "%" };
-    SirenXKnob highCutKnob    { "HIGH CUT", "Hz" };
-    SirenXKnob lowCutKnob     { "LOW CUT", "Hz" };
+    SirenXKnob lowPassKnob    { "LOW PASS", "Hz" };
+    SirenXKnob highPassKnob   { "HIGH PASS", "Hz" };
     SirenXKnob duckingKnob    { "DUCKING", "%" };
+
+    // Character selection buttons
+    juce::TextButton plateButton   { "PLATE" };
+    juce::TextButton vintageButton { "VINTAGE" };
+    juce::TextButton modernButton  { "MODERN" };
 
     juce::ToggleButton tooltipToggle { "HINTS" };
     std::unique_ptr<juce::TooltipWindow> tooltipWindow;
     
-    // Attachments
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> decayAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> preDelayAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> sizeAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> mixAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> widthAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> highCutAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> lowCutAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> lowPassAttachment;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> highPassAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> duckingAttachment;
     
     juce::Image cachedBackground;

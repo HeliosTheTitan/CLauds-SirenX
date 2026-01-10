@@ -1,7 +1,7 @@
 /*
   ==============================================================================
     
-    SirenX - Convolution Reverb Plugin
+    SirenX - Algorithmic Reverb Plugin
     Solar Productions
     
     PluginProcessor.cpp - Audio processing implementation
@@ -19,7 +19,6 @@ SirenXAudioProcessor::SirenXAudioProcessor()
                      .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "PARAMETERS", createParameterLayout())
 {
-    // Add parameter listeners
     apvts.addParameterListener("decayTime", this);
     apvts.addParameterListener("preDelay", this);
     apvts.addParameterListener("size", this);
@@ -28,6 +27,7 @@ SirenXAudioProcessor::SirenXAudioProcessor()
     apvts.addParameterListener("highCut", this);
     apvts.addParameterListener("lowCut", this);
     apvts.addParameterListener("ducking", this);
+    apvts.addParameterListener("character", this);
 }
 
 SirenXAudioProcessor::~SirenXAudioProcessor()
@@ -40,6 +40,7 @@ SirenXAudioProcessor::~SirenXAudioProcessor()
     apvts.removeParameterListener("highCut", this);
     apvts.removeParameterListener("lowCut", this);
     apvts.removeParameterListener("ducking", this);
+    apvts.removeParameterListener("character", this);
 }
 
 //==============================================================================
@@ -47,10 +48,10 @@ juce::AudioProcessorValueTreeState::ParameterLayout SirenXAudioProcessor::create
 {
     std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
     
-    // Decay Time (0.1s to 5.0s)
+    // Decay Time (0.1s to 10.0s) - Extended range for algorithmic reverb
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{ "decayTime", 1 }, "Decay",
-        juce::NormalisableRange<float>(0.1f, 5.0f, 0.1f, 0.5f),
+        juce::NormalisableRange<float>(0.1f, 10.0f, 0.1f, 0.4f),
         2.0f,
         juce::AudioParameterFloatAttributes().withLabel("s")));
     
@@ -61,7 +62,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout SirenXAudioProcessor::create
         0.0f,
         juce::AudioParameterFloatAttributes().withLabel("ms")));
 
-    // Size (Density) (0% to 100%)
+    // Size (0% to 100%)
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{ "size", 1 }, "Size",
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f),
@@ -86,7 +87,7 @@ juce::AudioProcessorValueTreeState::ParameterLayout SirenXAudioProcessor::create
     params.push_back(std::make_unique<juce::AudioParameterFloat>(
         juce::ParameterID{ "highCut", 1 }, "High Cut",
         juce::NormalisableRange<float>(200.0f, 20000.0f, 1.0f, 0.3f),
-        20000.0f,
+        12000.0f, // Lower default for warmer sound
         juce::AudioParameterFloatAttributes().withLabel("Hz")));
     
     // Low Cut Filter
@@ -102,6 +103,12 @@ juce::AudioProcessorValueTreeState::ParameterLayout SirenXAudioProcessor::create
         juce::NormalisableRange<float>(0.0f, 100.0f, 0.1f),
         0.0f,
         juce::AudioParameterFloatAttributes().withLabel("%")));
+
+    // Character (0 = Plate, 1 = Vintage, 2 = Modern)
+    params.push_back(std::make_unique<juce::AudioParameterChoice>(
+        juce::ParameterID{ "character", 1 }, "Character",
+        juce::StringArray{ "Plate", "Vintage", "Modern" },
+        2)); // Default to Modern
     
     return { params.begin(), params.end() };
 }
@@ -125,6 +132,18 @@ void SirenXAudioProcessor::parameterChanged(const juce::String& parameterID, flo
         reverbEngine.setLowCut(newValue);
     else if (parameterID == "ducking")
         reverbEngine.setDucking(newValue / 100.0f);
+    else if (parameterID == "character")
+    {
+        currentCharacter = static_cast<ReverbCharacter>(static_cast<int>(newValue));
+        reverbEngine.setCharacter(static_cast<int>(newValue));
+    }
+}
+
+void SirenXAudioProcessor::setCharacter(ReverbCharacter character)
+{
+    currentCharacter = character;
+    if (auto* param = apvts.getParameter("character"))
+        param->setValueNotifyingHost(static_cast<float>(static_cast<int>(character)) / 2.0f);
 }
 
 //==============================================================================
@@ -158,6 +177,13 @@ void SirenXAudioProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     reverbEngine.setHighCut(*apvts.getRawParameterValue("highCut"));
     reverbEngine.setLowCut(*apvts.getRawParameterValue("lowCut"));
     reverbEngine.setDucking(*apvts.getRawParameterValue("ducking") / 100.0f);
+    
+    // Initialize character
+    int charIndex = static_cast<int>(*apvts.getRawParameterValue("character"));
+    currentCharacter = static_cast<ReverbCharacter>(charIndex);
+    reverbEngine.setCharacter(charIndex);
+    
+    tempInputBuffer.setSize(2, samplesPerBlock);
 }
 
 void SirenXAudioProcessor::releaseResources()
@@ -177,7 +203,7 @@ bool SirenXAudioProcessor::isBusesLayoutSupported(const BusesLayout& layouts) co
 }
 
 void SirenXAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
-                                            juce::MidiBuffer& /*midiMessages*/)
+                                        juce::MidiBuffer& /*midiMessages*/)
 {
     juce::ScopedNoDenormals noDenormals;
     
@@ -188,54 +214,20 @@ void SirenXAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
     for (auto i = totalNumInputChannels; i < totalNumOutputChannels; ++i)
         buffer.clear(i, 0, buffer.getNumSamples());
     
-    // Update BPM if needed
-    if (auto* pHead = getPlayHead())
-    {
-        if (auto position = pHead->getPosition())
-        {
-            if (auto bpm = position->getBpm())
-            {
-                currentBPM = *bpm;
-            }
-        }
-    }
-    
-    // Analyze Input Levels (approx)
-    float maxInput = 0.0f;
-    if (buffer.getNumChannels() > 0)
-    {
-        maxInput = buffer.getMagnitude(0, buffer.getNumSamples());
-    }
-
-    // Push Input to Visualizer (Before processing)
+    // Store input for visualization
     if (buffer.getNumChannels() >= 2)
     {
-        auto* l = buffer.getReadPointer(0);
-        auto* r = buffer.getReadPointer(1);
-
-        // We need to capture Output later, so we push Input now, but FIFO expects pairs (Input, Output).
-        // Standard FIFO usually pushes pairs. If we push now, we don't have Output.
-        // We must buffer the input temporarily.
+        if (tempInputBuffer.getNumSamples() < buffer.getNumSamples())
+            tempInputBuffer.setSize(2, buffer.getNumSamples(), false, false, true);
+        
+        for (int ch = 0; ch < juce::jmin(2, buffer.getNumChannels()); ++ch)
+            tempInputBuffer.copyFrom(ch, 0, buffer, ch, 0, buffer.getNumSamples());
     }
 
-    // Create temp buffer for input visualization
-    if (tempInputBuffer.getNumChannels() < buffer.getNumChannels() || tempInputBuffer.getNumSamples() < buffer.getNumSamples())
-        tempInputBuffer.setSize(buffer.getNumChannels(), buffer.getNumSamples());
-
-    for (int ch = 0; ch < buffer.getNumChannels(); ++ch)
-        tempInputBuffer.copyFrom(ch, 0, buffer, ch, 0, buffer.getNumSamples());
-
-    // Process Reverb
+    // Process reverb (all DSP happens inside)
     reverbEngine.processBlock(buffer);
     
-    // Analyze Output Levels
-    float maxOutput = 0.0f;
-    if (buffer.getNumChannels() > 0)
-    {
-        maxOutput = buffer.getMagnitude(0, buffer.getNumSamples());
-    }
-
-    // Push to Visualizer
+    // Push to visualizer FIFO
     if (buffer.getNumChannels() >= 2)
     {
         auto* lIn = tempInputBuffer.getReadPointer(0);
@@ -243,17 +235,18 @@ void SirenXAudioProcessor::processBlock(juce::AudioBuffer<float>& buffer,
         auto* lOut = buffer.getReadPointer(0);
         auto* rOut = buffer.getReadPointer(1);
 
-        for (int i = 0; i < buffer.getNumSamples(); ++i)
+        // Downsample for visualizer (every 4th sample) to reduce CPU
+        for (int i = 0; i < buffer.getNumSamples(); i += 4)
         {
             float monoIn = (lIn[i] + rIn[i]) * 0.5f;
             float monoOut = (lOut[i] + rOut[i]) * 0.5f;
             audioFifo.push(monoIn, monoOut);
         }
     }
-
-    // Update atomic values for GUI
-    inputLevel.store(maxInput);
-    outputLevel.store(maxOutput);
+    
+    // Update level meters (use RMS for smoother display)
+    inputLevel.store(tempInputBuffer.getRMSLevel(0, 0, buffer.getNumSamples()));
+    outputLevel.store(buffer.getRMSLevel(0, 0, buffer.getNumSamples()));
 }
 
 //==============================================================================
