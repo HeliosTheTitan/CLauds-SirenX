@@ -382,9 +382,9 @@ void DuckingMeter::paint(juce::Graphics& g)
 
     if (meterHeight > 0.5f)
     {
-        // Gradient for the bar (Yellow/Orange for reduction)
-        juce::Colour c1 = juce::Colours::yellow.withAlpha(0.9f);
-        juce::Colour c2 = juce::Colours::red.withAlpha(0.9f);
+        // Gradient for the bar (Blue/Cyan for reduction to match theme)
+        juce::Colour c1 = currentPalette.accentBright.withAlpha(0.9f);
+        juce::Colour c2 = currentPalette.accentMid.withAlpha(0.9f);
 
         juce::ColourGradient grad(c1, meterArea.getX(), meterArea.getY(),
                                   c2, meterArea.getX(), meterArea.getBottom(), false);
