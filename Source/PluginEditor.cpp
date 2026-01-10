@@ -203,37 +203,6 @@ void SpectrumDisplay::paint(juce::Graphics& g)
     // Border
     g.setColour(currentPalette.metalBlueBright.withAlpha(0.5f));
     g.drawRoundedRectangle(bounds.reduced(1.0f), 4.0f, 1.0f);
-
-    // === Ducking Indicator ===
-    // Draw a small meter in the top right corner
-    float duckingGain = audioProcessor.getDuckingReduction(); // 1.0 = no reduction, 0.0 = full reduction
-    if (duckingGain < 0.99f)
-    {
-        float indicatorSize = 12.0f;
-        auto indicatorArea = bounds.reduced(10.0f).removeFromTop(indicatorSize).removeFromRight(100.0f);
-
-        // Label
-        g.setColour(currentPalette.textDim);
-        g.setFont(10.0f);
-        g.drawText("DUCKING", indicatorArea.removeFromLeft(50), juce::Justification::centredRight);
-
-        indicatorArea.removeFromLeft(5); // Gap
-
-        // Meter Bar
-        g.setColour(currentPalette.backgroundDark.darker());
-        g.fillRoundedRectangle(indicatorArea, 2.0f);
-
-        // Filled part (inverse, showing reduction amount)
-        float reduction = 1.0f - duckingGain; // 0.0 to 1.0
-        auto fillArea = indicatorArea.removeFromLeft(indicatorArea.getWidth() * reduction);
-
-        g.setColour(currentPalette.accentBright);
-        g.fillRoundedRectangle(fillArea, 2.0f);
-
-        // Glow
-        g.setColour(currentPalette.accentBright.withAlpha(0.4f));
-        g.fillRoundedRectangle(fillArea.expanded(1.0f), 3.0f);
-    }
 }
 
 void SpectrumDisplay::drawSpectrum(juce::Graphics& g, const std::vector<float>& spectrum, juce::Colour color, float alpha)
@@ -403,21 +372,6 @@ SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
     addAndMakeVisible(lowCutKnob);
     addAndMakeVisible(duckingKnob); // Added Ducking Knob
 
-    // Mode Selector
-    addAndMakeVisible(modeSelector);
-    modeSelector.addItemList({"Plate", "Vintage", "Modern"}, 1);
-    modeSelector.setJustificationType(juce::Justification::centred);
-    modeSelector.setTooltip("Select the reverb algorithm character.");
-
-    // Preset Selector
-    addAndMakeVisible(presetSelector);
-    juce::StringArray presets = { "Init", "Hall 1", "Hall 2", "Hall 3", "Room 1", "Room 2", "Room 3",
-                           "Plate 1", "Plate 2", "Plate 3", "Cathedral", "Canyon", "Space",
-                           "Ambient", "Shimmer", "Dark", "Bright", "Ethereal", "Extreme 1", "Extreme 2" };
-    presetSelector.addItemList(presets, 1);
-    presetSelector.setJustificationType(juce::Justification::centred);
-    presetSelector.setTooltip("Load a preset.");
-
     tooltipToggle.setColour(juce::ToggleButton::textColourId, SirenXColors::textDim);
     tooltipToggle.setColour(juce::ToggleButton::tickColourId, SirenXColors::accentBright);
     tooltipToggle.setToggleState(true, juce::dontSendNotification);
@@ -451,10 +405,6 @@ SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
         apvts, "lowCut", lowCutKnob.getSlider());
     duckingAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "ducking", duckingKnob.getSlider());
-    modeAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-        apvts, "mode", modeSelector);
-    presetAttachment = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
-        apvts, "preset", presetSelector);
     
     // Tooltips
     decayKnob.getSlider().setTooltip("Sets the reverb decay time.");
@@ -717,17 +667,6 @@ void SirenXAudioProcessorEditor::resized()
     // Controls
     // Let's layout knobs in a nice arc or 2 rows
     auto mainControls = faceplateArea;
-
-    // Place Preset Selector in Header area (below spectrum or integrated?)
-    // Let's put it at the very top of controls, below spectrum
-    auto controlsHeader = mainControls.removeFromTop(30);
-    presetSelector.setBounds(controlsHeader.removeFromLeft(150));
-
-    // Mode selector near controls
-    modeSelector.setBounds(controlsHeader.removeFromRight(120));
-
-    mainControls.removeFromTop(10);
-
     int knobWidth = mainControls.getWidth() / 4;
     int knobHeight = 90;
 

@@ -116,9 +116,6 @@ private:
     SirenXKnob lowCutKnob     { "LOW CUT", "Hz" };
     SirenXKnob duckingKnob    { "DUCKING", "%" };
 
-    juce::ComboBox modeSelector;
-    juce::ComboBox presetSelector;
-
     juce::ToggleButton tooltipToggle { "HINTS" };
     std::unique_ptr<juce::TooltipWindow> tooltipWindow;
     
@@ -131,8 +128,6 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> highCutAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> lowCutAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> duckingAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> modeAttachment;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> presetAttachment;
     
     juce::Image cachedBackground;
 
