@@ -601,10 +601,11 @@ public:
 private:
     void setInputDiffusionDelays()
     {
-        inputDiffusion[0].setDelay(msToSamples(4.77f));
-        inputDiffusion[1].setDelay(msToSamples(3.60f));
-        inputDiffusion[2].setDelay(msToSamples(12.73f));
-        inputDiffusion[3].setDelay(msToSamples(9.31f));
+        // Tighter input diffusion for faster onset (approx 60% of original Dattorro values)
+        inputDiffusion[0].setDelay(msToSamples(3.0f));
+        inputDiffusion[1].setDelay(msToSamples(2.2f));
+        inputDiffusion[2].setDelay(msToSamples(8.0f));
+        inputDiffusion[3].setDelay(msToSamples(6.0f));
     }
     
     void setTankDelays()
@@ -753,9 +754,14 @@ public:
     void setPreDelay(float ms)
     {
         preDelayMs = juce::jlimit(0.0f, 500.0f, ms);
-        int samples = static_cast<int>(preDelayMs * sampleRate / 1000.0);
-        preDelayL.setDelay(samples);
-        preDelayR.setDelay(samples);
+        preDelayActive = (preDelayMs > 0.1f); // Bypass if near zero to avoid circular buffer wrap-around lag
+
+        if (preDelayActive)
+        {
+            int samples = static_cast<int>(preDelayMs * sampleRate / 1000.0);
+            preDelayL.setDelay(samples);
+            preDelayR.setDelay(samples);
+        }
     }
 
     void setSize(float s)
@@ -853,8 +859,20 @@ public:
             else
                 duckingEnvelope = duckingEnvelope * releaseCoeff;
 
-            float preL = preDelayL.process(dryL);
-            float preR = preDelayR.process(dryR);
+            float preL, preR;
+            if (preDelayActive)
+            {
+                preL = preDelayL.process(dryL);
+                preR = preDelayR.process(dryR);
+            }
+            else
+            {
+                preL = dryL;
+                preR = dryR;
+                // Still push to delay lines to keep buffer fresh if parameter changes
+                preDelayL.process(dryL);
+                preDelayR.process(dryR);
+            }
 
             float erL, erR;
             earlyReflections.process(preL, preR, erL, erR);
@@ -972,4 +990,5 @@ private:
     float lastWetL = 0.0f;
     float lastWetR = 0.0f;
     float currentDuckingGain = 1.0f;
+    bool preDelayActive = true;
 };
