@@ -699,31 +699,7 @@ public:
         highCutFilter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
         highCutFilter.setCutoffFrequency(20000.0f);
 
-        // Smart Ducking Filters
-        // Sidechain: Bandpass at 350Hz to detect mud
-        sidechainFilter.prepare(spec);
-        sidechainFilter.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
-        sidechainFilter.setCutoffFrequency(350.0f);
-        sidechainFilter.setResonance(0.707f); // Q ~ 1.0
-
-        // Unmask: Bandpass filter at 350Hz.
-        // We will subtract this from the signal to create a notch (unmasking effect)
-        unmaskFilter.prepare(spec);
-        unmaskFilter.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
-        unmaskFilter.setCutoffFrequency(350.0f);
-        unmaskFilter.setResonance(0.707f);
-
-        // Spectrum Analysis Filters for Intelligent Tracking
-        analysisLP.prepare(spec);
-        analysisLP.setType(juce::dsp::FirstOrderTPTFilterType::lowpass);
-        analysisLP.setCutoffFrequency(800.0f); // Split point
-
-        analysisHP.prepare(spec);
-        analysisHP.setType(juce::dsp::FirstOrderTPTFilterType::highpass);
-        analysisHP.setCutoffFrequency(800.0f);
-
-        duckingEnvelope = 0.0f;
-        trackerFrequency = 350.0f;
+        // Ducking filters removed as per request to disable logic completely
 
         setCharacter(2);
         prepared = true;
@@ -737,12 +713,7 @@ public:
         tank.clear();
         lowCutFilter.reset();
         highCutFilter.reset();
-        sidechainFilter.reset();
-        unmaskFilter.reset();
-        analysisLP.reset();
-        analysisHP.reset();
-        duckingEnvelope = 0.0f;
-        trackerFrequency = 350.0f;
+        // Ducking filters reset removed
     }
 
     void setDecayTime(float seconds)
@@ -824,43 +795,8 @@ public:
         {
             float dryL = leftChannel[i];
             float dryR = rightChannel[i];
-            float drySum = (dryL + dryR) * 0.5f;
-
-            // Intelligent Tracking
-            // Analyze spectral balance to find the "body" of the signal
-            float lowEnergy = std::abs(analysisLP.processSample(0, drySum));
-            float highEnergy = std::abs(analysisHP.processSample(0, drySum));
-
-            float balance = highEnergy / (lowEnergy + highEnergy + 1e-5f);
-
-            // Map balance (0..1) to Frequency Range (200Hz .. 3000Hz)
-            // If balance is 0 (all low), freq is 200Hz. If 1 (all high), freq is 3000Hz.
-            float targetFreq = 200.0f + balance * 2800.0f;
-
-            // Smooth the tracking frequency (slow reaction to avoid modulation artifacts)
-            trackerFrequency = trackerFrequency * 0.999f + targetFreq * 0.001f;
-
-            // Update filters occasionally (every 64 samples would be efficient, but per-sample is smoother)
-            // To save CPU, we could do it less often, but here we do per sample for best quality
-            sidechainFilter.setCutoffFrequency(trackerFrequency);
-            unmaskFilter.setCutoffFrequency(trackerFrequency);
-
-            // Smart Ducking Envelope
-            // Detect energy at the tracked frequency
-            float bandEnergy = sidechainFilter.processSample(0, drySum);
-
-            // Apply Threshold to prevent "always on" behavior with noise
-            float threshold = 0.05f;
-            float inputLevel = std::max(0.0f, std::abs(bandEnergy) - threshold);
-
-            // Fast attack, musical release (slower swell)
-            float attackCoeff = 0.01f;
-            float releaseCoeff = 0.9998f; // ~200ms release for smoother flow
             
-            if (inputLevel > duckingEnvelope)
-                duckingEnvelope = duckingEnvelope + attackCoeff * (inputLevel - duckingEnvelope);
-            else
-                duckingEnvelope = duckingEnvelope * releaseCoeff;
+            // Ducking logic removed entirely
 
             float preL, preR;
             if (preDelayActive)
@@ -906,25 +842,8 @@ public:
             lastWetL = wetL;
             lastWetR = wetR;
 
-            if (duckingAmount > 0.0f)
-            {
-                // Broadband Volume Ducking Logic (Intelligent Trigger)
-                // We use the tracked "body" energy to trigger the ducking,
-                // but we reduce the entire reverb signal to create clear space.
-                // This provides the classic "flow" users expect.
-
-                float reduction = duckingEnvelope * duckingAmount * 4.0f;
-                float duckGain = 1.0f - juce::jlimit(0.0f, 1.0f, reduction);
-
-                wetL *= duckGain;
-                wetR *= duckGain;
-
-                currentDuckingGain = duckGain;
-            }
-            else
-            {
-                currentDuckingGain = 1.0f;
-            }
+            // Ducking application removed
+            currentDuckingGain = 1.0f;
 
             // Mix: dry signal is untouched, only wet signal is filtered
             leftChannel[i] = dryL * (1.0f - mix) + wetL * mix;
@@ -975,16 +894,6 @@ private:
     juce::dsp::StateVariableTPTFilter<float> lowCutFilter;
     juce::dsp::StateVariableTPTFilter<float> highCutFilter;
 
-    // Intelligent Ducking Filters
-    juce::dsp::StateVariableTPTFilter<float> sidechainFilter;
-    juce::dsp::StateVariableTPTFilter<float> unmaskFilter;
-
-    // Tracking Filters
-    juce::dsp::FirstOrderTPTFilter<float> analysisLP;
-    juce::dsp::FirstOrderTPTFilter<float> analysisHP;
-
-    float duckingEnvelope = 0.0f;
-    float trackerFrequency = 350.0f;
     float lastWetL = 0.0f;
     float lastWetR = 0.0f;
     float currentDuckingGain = 1.0f;
