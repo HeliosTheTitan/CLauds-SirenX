@@ -521,6 +521,8 @@ public:
 
     void setModulation(float amount) { modDepth = amount; }
     
+    void setSizeScale(float scale) { sizeScale = juce::jlimit(0.1f, 2.0f, scale); }
+
     void setCharacter(const CharacterSettings& settings)
     {
         charSettings = settings;
@@ -567,39 +569,60 @@ public:
         float mod3 = lfo[3].processTriangle() * modDepth * charSettings.modDepth / 12.0f;
 
         // Left tank
-        float baseDelay1L = msToSamplesF(22.58f);
+        float baseDelay1L = msToSamplesF(22.58f) * sizeScale;
         float sideL = tankAPF1[0].processModulated(inL, baseDelay1L + mod0);
 
         // Tap early energy from the loop (after first APF)
         float earlyL = sideL;
 
-        sideL = tankDelay1[0].process(sideL);
+        // Use readInterpolated for variable size on the main delay too
+        // tankDelay1[0] is a DelayLine. process() uses fixed setDelay().
+        // We need to use readInterpolated() manually.
+        float delaySamples1L = msToSamplesF(149.63f) * sizeScale;
+        float delayedL = tankDelay1[0].readInterpolated(delaySamples1L);
+        tankDelay1[0].write(sideL);
+        sideL = delayedL;
+
         sideL = damping[0].process(sideL);
         
         float bassL = bassFilter[0].process(sideL);
         sideL = sideL + bassL * (charSettings.bassMult - 1.0f);
         
-        float baseDelay2L = msToSamplesF(60.48f);
+        float baseDelay2L = msToSamplesF(60.48f) * sizeScale;
         sideL = tankAPF2[0].processModulated(sideL, baseDelay2L + mod2);
-        sideL = tankDelay2[0].process(sideL);
+
+        float delaySamples2L = msToSamplesF(125.0f) * sizeScale;
+        float delayed2L = tankDelay2[0].readInterpolated(delaySamples2L);
+        tankDelay2[0].write(sideL);
+        sideL = delayed2L;
+
         tankState[0] = dcBlocker[0].process(sideL);
 
         // Right tank
-        float baseDelay1R = msToSamplesF(30.51f);
+        float baseDelay1R = msToSamplesF(30.51f) * sizeScale;
         float sideR = tankAPF1[1].processModulated(inR, baseDelay1R + mod1);
 
         // Tap early energy from the loop
         float earlyR = sideR;
 
-        sideR = tankDelay1[1].process(sideR);
+        float delaySamples1R = msToSamplesF(141.70f) * sizeScale;
+        float delayedR = tankDelay1[1].readInterpolated(delaySamples1R);
+        tankDelay1[1].write(sideR);
+        sideR = delayedR;
+
         sideR = damping[1].process(sideR);
         
         float bassR = bassFilter[1].process(sideR);
         sideR = sideR + bassR * (charSettings.bassMult - 1.0f);
         
-        float baseDelay2R = msToSamplesF(89.24f);
+        float baseDelay2R = msToSamplesF(89.24f) * sizeScale;
         sideR = tankAPF2[1].processModulated(sideR, baseDelay2R + mod3);
-        sideR = tankDelay2[1].process(sideR);
+
+        float delaySamples2R = msToSamplesF(106.28f) * sizeScale;
+        float delayed2R = tankDelay2[1].readInterpolated(delaySamples2R);
+        tankDelay2[1].write(sideR);
+        sideR = delayed2R;
+
         tankState[1] = dcBlocker[1].process(sideR);
 
         float cf = charSettings.crossfeed;
@@ -668,6 +691,7 @@ private:
     double sr = 44100.0;
     float decay = 0.5f;
     float modDepth = 0.5f;
+    float sizeScale = 1.0f;
     float targetDampingFreq = 8000.0f;
     CharacterSettings charSettings;
 
@@ -764,6 +788,12 @@ public:
     {
         size = juce::jlimit(0.0f, 1.0f, s);
         earlyReflections.setSize(0.3f + size * 0.7f);
+
+        // Dynamic Size Scaling for Late Reverb
+        // Scales internal delay times from 0.5x to 1.5x
+        // This will pitch warp when moved (Tape effect), which is expected and confirms it's working.
+        tank.setSizeScale(0.5f + size * 1.0f);
+
         updateTankDecay();
     }
 
