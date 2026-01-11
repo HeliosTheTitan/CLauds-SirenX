@@ -569,6 +569,10 @@ public:
         // Left tank
         float baseDelay1L = msToSamplesF(22.58f);
         float sideL = tankAPF1[0].processModulated(inL, baseDelay1L + mod0);
+
+        // Tap early energy from the loop (after first APF)
+        float earlyL = sideL;
+
         sideL = tankDelay1[0].process(sideL);
         sideL = damping[0].process(sideL);
         
@@ -583,6 +587,10 @@ public:
         // Right tank
         float baseDelay1R = msToSamplesF(30.51f);
         float sideR = tankAPF1[1].processModulated(inR, baseDelay1R + mod1);
+
+        // Tap early energy from the loop
+        float earlyR = sideR;
+
         sideR = tankDelay1[1].process(sideR);
         sideR = damping[1].process(sideR);
         
@@ -595,8 +603,14 @@ public:
         tankState[1] = dcBlocker[1].process(sideR);
 
         float cf = charSettings.crossfeed;
-        outL = tankState[0] * (1.0f - cf) + tankState[1] * cf;
-        outR = tankState[1] * (1.0f - cf) + tankState[0] * cf;
+
+        // Mix standard Late reverb with Early Tail taps to fill the gap
+        float lateL = tankState[0] * (1.0f - cf) + tankState[1] * cf;
+        float lateR = tankState[1] * (1.0f - cf) + tankState[0] * cf;
+
+        // Blend in the early taps (gain 0.4)
+        outL = lateL + earlyL * 0.4f;
+        outR = lateR + earlyR * 0.4f;
     }
 
 private:
