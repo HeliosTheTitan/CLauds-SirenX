@@ -432,8 +432,9 @@ public:
 private:
     void updateTapSamples()
     {
-        tapTimesMs = { 5.0f, 11.0f, 17.0f, 23.0f, 31.0f, 37.0f, 43.0f, 53.0f, 
-                       61.0f, 71.0f, 79.0f, 89.0f, 97.0f, 107.0f, 113.0f, 127.0f };
+        // Start first tap at 0.0ms for instant response
+        tapTimesMs = { 0.0f, 6.0f, 12.0f, 19.0f, 26.0f, 33.0f, 40.0f, 51.0f,
+                       59.0f, 69.0f, 78.0f, 88.0f, 96.0f, 106.0f, 112.0f, 126.0f };
         
         tapPans = { 0.25f, 0.75f, 0.35f, 0.65f, 0.2f, 0.8f, 0.45f, 0.55f,
                     0.6f, 0.4f, 0.7f, 0.3f, 0.8f, 0.2f, 0.5f, 0.5f };
