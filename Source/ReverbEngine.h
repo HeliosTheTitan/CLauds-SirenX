@@ -716,7 +716,14 @@ public:
         highCutFilter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
         highCutFilter.setCutoffFrequency(20000.0f);
 
-        // Ducking filters removed as per request to disable logic completely
+        // Intelligent Ducking Detection Filter (Sidechain)
+        // Detects "mud" frequencies to trigger the ducking
+        sidechainFilter.prepare(spec);
+        sidechainFilter.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
+        sidechainFilter.setCutoffFrequency(350.0f);
+        sidechainFilter.setResonance(0.707f);
+
+        duckingEnvelope = 0.0f;
 
         setCharacter(2);
         prepared = true;
@@ -730,7 +737,8 @@ public:
         tank.clear();
         lowCutFilter.reset();
         highCutFilter.reset();
-        // Ducking filters reset removed
+        sidechainFilter.reset();
+        duckingEnvelope = 0.0f;
     }
 
     void setDecayTime(float seconds)
@@ -812,8 +820,21 @@ public:
         {
             float dryL = leftChannel[i];
             float dryR = rightChannel[i];
+
+            // Intelligent Ducking Analysis
+            // Analyze input signal around 350Hz (mud range) to trigger ducking
+            float drySum = (dryL + dryR) * 0.5f;
+            float bandEnergy = sidechainFilter.processSample(0, drySum);
+            float inputLevel = std::abs(bandEnergy);
+
+            // Envelope follower with musical attack/release
+            float attackCoeff = 0.01f;
+            float releaseCoeff = 0.9998f;
             
-            // Ducking logic removed entirely
+            if (inputLevel > duckingEnvelope)
+                duckingEnvelope = duckingEnvelope + attackCoeff * (inputLevel - duckingEnvelope);
+            else
+                duckingEnvelope = duckingEnvelope * releaseCoeff;
 
             float preL, preR;
             if (preDelayActive)
@@ -859,8 +880,24 @@ public:
             lastWetL = wetL;
             lastWetR = wetR;
 
-            // Ducking application removed
-            currentDuckingGain = 1.0f;
+            if (duckingAmount > 0.0f)
+            {
+                // Apply Ducking to Wet Signal ONLY
+                // Intensity scales with knob (0% to 100%)
+                // We use the envelope of the "mud" frequencies to duck the entire reverb
+
+                float reduction = duckingEnvelope * duckingAmount * 4.0f;
+                float duckGain = 1.0f - juce::jlimit(0.0f, 1.0f, reduction);
+
+                wetL *= duckGain;
+                wetR *= duckGain;
+
+                currentDuckingGain = duckGain;
+            }
+            else
+            {
+                currentDuckingGain = 1.0f;
+            }
 
             // Mix: dry signal is untouched, only wet signal is filtered
             leftChannel[i] = dryL * (1.0f - mix) + wetL * mix;
@@ -910,6 +947,10 @@ private:
 
     juce::dsp::StateVariableTPTFilter<float> lowCutFilter;
     juce::dsp::StateVariableTPTFilter<float> highCutFilter;
+
+    // Ducking Detection
+    juce::dsp::StateVariableTPTFilter<float> sidechainFilter;
+    float duckingEnvelope = 0.0f;
 
     float lastWetL = 0.0f;
     float lastWetR = 0.0f;
