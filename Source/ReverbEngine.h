@@ -608,19 +608,21 @@ public:
         float lateL = tankState[0] * (1.0f - cf) + tankState[1] * cf;
         float lateR = tankState[1] * (1.0f - cf) + tankState[0] * cf;
 
-        // Blend in the early taps (gain 0.4)
-        outL = lateL + earlyL * 0.4f;
-        outR = lateR + earlyR * 0.4f;
+        // Blend in the early taps directly from diffusion to ensure immediate onset
+        // Use a higher gain to ensure it is audible and fills the start gap
+        outL = lateL + earlyL * 0.5f;
+        outR = lateR + earlyR * 0.5f;
     }
 
 private:
     void setInputDiffusionDelays()
     {
-        // Tighter input diffusion for faster onset (approx 60% of original Dattorro values)
-        inputDiffusion[0].setDelay(msToSamples(3.0f));
-        inputDiffusion[1].setDelay(msToSamples(2.2f));
-        inputDiffusion[2].setDelay(msToSamples(8.0f));
-        inputDiffusion[3].setDelay(msToSamples(6.0f));
+        // Minimal input diffusion delays for instant onset
+        // Effectively 1 sample but kept slightly higher to maintain some smearing character
+        inputDiffusion[0].setDelay(1);
+        inputDiffusion[1].setDelay(1);
+        inputDiffusion[2].setDelay(1);
+        inputDiffusion[3].setDelay(1);
     }
     
     void setTankDelays()
