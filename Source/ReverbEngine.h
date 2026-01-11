@@ -848,11 +848,14 @@ public:
             // Smart Ducking Envelope
             // Detect energy at the tracked frequency
             float bandEnergy = sidechainFilter.processSample(0, drySum);
-            float inputLevel = std::abs(bandEnergy);
 
-            // Fast attack, smooth release for transparent unmasking
+            // Apply Threshold to prevent "always on" behavior with noise
+            float threshold = 0.05f;
+            float inputLevel = std::max(0.0f, std::abs(bandEnergy) - threshold);
+
+            // Fast attack, musical release (slower swell)
             float attackCoeff = 0.01f;
-            float releaseCoeff = 0.9995f;
+            float releaseCoeff = 0.9998f; // ~200ms release for smoother flow
             
             if (inputLevel > duckingEnvelope)
                 duckingEnvelope = duckingEnvelope + attackCoeff * (inputLevel - duckingEnvelope);
@@ -905,23 +908,18 @@ public:
 
             if (duckingAmount > 0.0f)
             {
-                // Dynamic EQ Logic:
-                // We calculate how much of the bandpass signal to subtract.
-                // Higher envelope = more subtraction = deeper notch.
+                // Broadband Volume Ducking Logic (Intelligent Trigger)
+                // We use the tracked "body" energy to trigger the ducking,
+                // but we reduce the entire reverb signal to create clear space.
+                // This provides the classic "flow" users expect.
 
-                float reductionAmount = duckingEnvelope * duckingAmount * 6.0f;
-                reductionAmount = juce::jlimit(0.0f, 1.0f, reductionAmount);
+                float reduction = duckingEnvelope * duckingAmount * 4.0f;
+                float duckGain = 1.0f - juce::jlimit(0.0f, 1.0f, reduction);
 
-                // Process wet signal through bandpass
-                float bpL = unmaskFilter.processSample(0, wetL);
-                float bpR = unmaskFilter.processSample(1, wetR);
+                wetL *= duckGain;
+                wetR *= duckGain;
 
-                // Subtract bandpass from original to create dynamic notch
-                wetL -= bpL * reductionAmount;
-                wetR -= bpR * reductionAmount;
-
-                // For visualization, approximate gain
-                currentDuckingGain = 1.0f - reductionAmount * 0.5f;
+                currentDuckingGain = duckGain;
             }
             else
             {
