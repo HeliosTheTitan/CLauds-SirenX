@@ -297,7 +297,7 @@ SirenXKnob::SirenXKnob(const juce::String& labelText, const juce::String& suffix
     {
         juce::String text;
         double value = slider.getValue();
-        
+
         if (value >= 1000.0)
             text = juce::String(value / 1000.0, 2) + "k";
         else if (value >= 100.0)
@@ -306,10 +306,10 @@ SirenXKnob::SirenXKnob(const juce::String& labelText, const juce::String& suffix
             text = juce::String(value, 1);
         else
             text = juce::String(value, 2);
-        
+
         if (suffixText.isNotEmpty())
             text += " " + suffixText;
-        
+
         valueLabel.setText(text, juce::dontSendNotification);
     };
 }
@@ -709,7 +709,7 @@ void SirenXAudioProcessorEditor::resized()
     int buttonWidth = 100;
     int totalButtonWidth = buttonWidth * 3 + 20; // 3 buttons + spacing
     int buttonStartX = (buttonRow.getWidth() - totalButtonWidth) / 2;
-    
+
     buttonRow.removeFromLeft(buttonStartX);
     plateButton.setBounds(buttonRow.removeFromLeft(buttonWidth));
     buttonRow.removeFromLeft(10);
