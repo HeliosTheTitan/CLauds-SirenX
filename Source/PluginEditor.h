@@ -76,6 +76,9 @@ public:
     
     void setPalette(const SirenXPalette& palette);
 
+    void forceUpdateLabel();
+    std::function<juce::String(double)> customValueText;
+
 private:
     juce::Slider slider;
     juce::Label label;
@@ -83,6 +86,22 @@ private:
     juce::String suffixText;
     
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SirenXKnob)
+};
+
+//==============================================================================
+// Ducking Meter Component
+//==============================================================================
+class DuckingMeter : public juce::Component
+{
+public:
+    DuckingMeter() = default;
+    void paint(juce::Graphics& g) override;
+    void setGainReduction(float gain);
+    void setPalette(const SirenXPalette& palette);
+
+private:
+    float currentGain = 1.0f;
+    SirenXPalette currentPalette = SirenXPalette::getNeonBlue();
 };
 
 //==============================================================================
@@ -105,6 +124,7 @@ private:
     void drawFooter(juce::Graphics& g);
     void drawSideRails(juce::Graphics& g);
     void drawScrew(juce::Graphics& g, float x, float y, float size);
+    void drawNorthStar(juce::Graphics& g, float x, float y, float size);
     void updateCharacterButtons();
     
     SirenXAudioProcessor& audioProcessor;
@@ -122,14 +142,37 @@ private:
     SirenXKnob highPassKnob   { "HIGH PASS", "Hz" };
     SirenXKnob duckingKnob    { "DUCKING", "%" };
 
+    DuckingMeter duckingMeter;
+
     // Character selection buttons
     juce::TextButton plateButton   { "PLATE" };
     juce::TextButton vintageButton { "VINTAGE" };
     juce::TextButton modernButton  { "MODERN" };
 
+    juce::ComboBox presetCombo;
     juce::ToggleButton tooltipToggle { "HINTS" };
     std::unique_ptr<juce::TooltipWindow> tooltipWindow;
     
+    struct Preset
+    {
+        juce::String name;
+        juce::String category;
+        juce::String description;
+        float decay;    // s
+        float preDelay; // ms
+        float size;     // %
+        float mix;      // %
+        float width;    // %
+        float highCut;  // Hz
+        float lowCut;   // Hz
+        float ducking;  // %
+        int character;  // 0=Plate, 1=Vintage, 2=Modern
+    };
+
+    std::vector<Preset> presets;
+    void loadPreset(int index);
+    void initPresets();
+
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> decayAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> preDelayAttachment;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> sizeAttachment;

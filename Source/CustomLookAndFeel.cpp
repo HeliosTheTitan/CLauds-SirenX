@@ -41,9 +41,8 @@ void SirenXLookAndFeel::setPalette(const SirenXPalette& newPalette)
 //==============================================================================
 juce::Font SirenXLookAndFeel::getConsolasFont(float height, bool bold)
 {
-    auto font = juce::Font(juce::FontOptions().withName("Consolas")
-                                              .withHeight(height)
-                                              .withStyle(bold ? "Bold" : "Regular"));
+    // Compatible with older JUCE versions (pre-FontOptions)
+    juce::Font font("Consolas", height, bold ? juce::Font::bold : juce::Font::plain);
     font.setExtraKerningFactor(0.15f);
     return font;
 }
@@ -364,6 +363,16 @@ void SirenXLookAndFeel::drawPopupMenuItem(juce::Graphics& g, const juce::Rectang
         g.setColour(isHighlighted ? palette.backgroundDark : palette.accentBright);
         g.drawText(juce::CharPointer_UTF8("\xe2\x9c\x93"), tickBounds, juce::Justification::centred);
     }
+}
+
+//==============================================================================
+juce::PopupMenu::Options SirenXLookAndFeel::getOptionsForComboBoxPopupMenu(juce::ComboBox& box, juce::Label& label)
+{
+    // Configure popup menu options
+    return juce::PopupMenu::Options().withTargetComponent(&box)
+                                     .withMinimumNumColumns(1)
+                                     .withMaximumNumColumns(1)
+                                     .withStandardItemHeight(label.getHeight());
 }
 
 //==============================================================================

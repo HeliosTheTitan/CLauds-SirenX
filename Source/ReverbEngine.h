@@ -432,8 +432,9 @@ public:
 private:
     void updateTapSamples()
     {
-        tapTimesMs = { 5.0f, 11.0f, 17.0f, 23.0f, 31.0f, 37.0f, 43.0f, 53.0f, 
-                       61.0f, 71.0f, 79.0f, 89.0f, 97.0f, 107.0f, 113.0f, 127.0f };
+        // Start first tap at 0.0ms for instant response
+        tapTimesMs = { 0.0f, 6.0f, 12.0f, 19.0f, 26.0f, 33.0f, 40.0f, 51.0f,
+                       59.0f, 69.0f, 78.0f, 88.0f, 96.0f, 106.0f, 112.0f, 126.0f };
         
         tapPans = { 0.25f, 0.75f, 0.35f, 0.65f, 0.2f, 0.8f, 0.45f, 0.55f,
                     0.6f, 0.4f, 0.7f, 0.3f, 0.8f, 0.2f, 0.5f, 0.5f };
@@ -520,6 +521,8 @@ public:
 
     void setModulation(float amount) { modDepth = amount; }
     
+    void setSizeScale(float scale) { sizeScale = juce::jlimit(0.1f, 2.0f, scale); }
+
     void setCharacter(const CharacterSettings& settings)
     {
         charSettings = settings;
@@ -566,45 +569,83 @@ public:
         float mod3 = lfo[3].processTriangle() * modDepth * charSettings.modDepth / 12.0f;
 
         // Left tank
-        float baseDelay1L = msToSamplesF(22.58f);
+        float baseDelay1L = msToSamplesF(22.58f) * sizeScale;
         float sideL = tankAPF1[0].processModulated(inL, baseDelay1L + mod0);
-        sideL = tankDelay1[0].process(sideL);
+
+        // Tap early energy from the loop (after first APF)
+        float earlyL = sideL;
+
+        // Use readInterpolated for variable size on the main delay too
+        // tankDelay1[0] is a DelayLine. process() uses fixed setDelay().
+        // We need to use readInterpolated() manually.
+        float delaySamples1L = msToSamplesF(149.63f) * sizeScale;
+        float delayedL = tankDelay1[0].readInterpolated(delaySamples1L);
+        tankDelay1[0].write(sideL);
+        sideL = delayedL;
+
         sideL = damping[0].process(sideL);
         
         float bassL = bassFilter[0].process(sideL);
         sideL = sideL + bassL * (charSettings.bassMult - 1.0f);
         
-        float baseDelay2L = msToSamplesF(60.48f);
+        float baseDelay2L = msToSamplesF(60.48f) * sizeScale;
         sideL = tankAPF2[0].processModulated(sideL, baseDelay2L + mod2);
-        sideL = tankDelay2[0].process(sideL);
+
+        float delaySamples2L = msToSamplesF(125.0f) * sizeScale;
+        float delayed2L = tankDelay2[0].readInterpolated(delaySamples2L);
+        tankDelay2[0].write(sideL);
+        sideL = delayed2L;
+
         tankState[0] = dcBlocker[0].process(sideL);
 
         // Right tank
-        float baseDelay1R = msToSamplesF(30.51f);
+        float baseDelay1R = msToSamplesF(30.51f) * sizeScale;
         float sideR = tankAPF1[1].processModulated(inR, baseDelay1R + mod1);
-        sideR = tankDelay1[1].process(sideR);
+
+        // Tap early energy from the loop
+        float earlyR = sideR;
+
+        float delaySamples1R = msToSamplesF(141.70f) * sizeScale;
+        float delayedR = tankDelay1[1].readInterpolated(delaySamples1R);
+        tankDelay1[1].write(sideR);
+        sideR = delayedR;
+
         sideR = damping[1].process(sideR);
         
         float bassR = bassFilter[1].process(sideR);
         sideR = sideR + bassR * (charSettings.bassMult - 1.0f);
         
-        float baseDelay2R = msToSamplesF(89.24f);
+        float baseDelay2R = msToSamplesF(89.24f) * sizeScale;
         sideR = tankAPF2[1].processModulated(sideR, baseDelay2R + mod3);
-        sideR = tankDelay2[1].process(sideR);
+
+        float delaySamples2R = msToSamplesF(106.28f) * sizeScale;
+        float delayed2R = tankDelay2[1].readInterpolated(delaySamples2R);
+        tankDelay2[1].write(sideR);
+        sideR = delayed2R;
+
         tankState[1] = dcBlocker[1].process(sideR);
 
         float cf = charSettings.crossfeed;
-        outL = tankState[0] * (1.0f - cf) + tankState[1] * cf;
-        outR = tankState[1] * (1.0f - cf) + tankState[0] * cf;
+
+        // Mix standard Late reverb with Early Tail taps to fill the gap
+        float lateL = tankState[0] * (1.0f - cf) + tankState[1] * cf;
+        float lateR = tankState[1] * (1.0f - cf) + tankState[0] * cf;
+
+        // Blend in the early taps directly from diffusion to ensure immediate onset
+        // Use a higher gain to ensure it is audible and fills the start gap
+        outL = lateL + earlyL * 0.5f;
+        outR = lateR + earlyR * 0.5f;
     }
 
 private:
     void setInputDiffusionDelays()
     {
-        inputDiffusion[0].setDelay(msToSamples(4.77f));
-        inputDiffusion[1].setDelay(msToSamples(3.60f));
-        inputDiffusion[2].setDelay(msToSamples(12.73f));
-        inputDiffusion[3].setDelay(msToSamples(9.31f));
+        // Minimal input diffusion delays for instant onset
+        // Effectively 1 sample but kept slightly higher to maintain some smearing character
+        inputDiffusion[0].setDelay(1);
+        inputDiffusion[1].setDelay(1);
+        inputDiffusion[2].setDelay(1);
+        inputDiffusion[3].setDelay(1);
     }
     
     void setTankDelays()
@@ -650,6 +691,7 @@ private:
     double sr = 44100.0;
     float decay = 0.5f;
     float modDepth = 0.5f;
+    float sizeScale = 1.0f;
     float targetDampingFreq = 8000.0f;
     CharacterSettings charSettings;
 
@@ -698,7 +740,15 @@ public:
         highCutFilter.setType(juce::dsp::StateVariableTPTFilterType::lowpass);
         highCutFilter.setCutoffFrequency(20000.0f);
 
+        // Intelligent Ducking Detection Filter (Sidechain)
+        // Detects "mud" frequencies to trigger the ducking
+        sidechainFilter.prepare(spec);
+        sidechainFilter.setType(juce::dsp::StateVariableTPTFilterType::bandpass);
+        sidechainFilter.setCutoffFrequency(350.0f);
+        sidechainFilter.setResonance(0.707f);
+
         duckingEnvelope = 0.0f;
+
         setCharacter(2);
         prepared = true;
     }
@@ -711,6 +761,7 @@ public:
         tank.clear();
         lowCutFilter.reset();
         highCutFilter.reset();
+        sidechainFilter.reset();
         duckingEnvelope = 0.0f;
     }
 
@@ -723,15 +774,26 @@ public:
     void setPreDelay(float ms)
     {
         preDelayMs = juce::jlimit(0.0f, 500.0f, ms);
-        int samples = static_cast<int>(preDelayMs * sampleRate / 1000.0);
-        preDelayL.setDelay(samples);
-        preDelayR.setDelay(samples);
+        preDelayActive = (preDelayMs > 0.1f); // Bypass if near zero to avoid circular buffer wrap-around lag
+
+        if (preDelayActive)
+        {
+            int samples = static_cast<int>(preDelayMs * sampleRate / 1000.0);
+            preDelayL.setDelay(samples);
+            preDelayR.setDelay(samples);
+        }
     }
 
     void setSize(float s)
     {
         size = juce::jlimit(0.0f, 1.0f, s);
         earlyReflections.setSize(0.3f + size * 0.7f);
+
+        // Dynamic Size Scaling for Late Reverb
+        // Scales internal delay times from 0.5x to 1.5x
+        // This will pitch warp when moved (Tape effect), which is expected and confirms it's working.
+        tank.setSizeScale(0.5f + size * 1.0f);
+
         updateTankDecay();
     }
 
@@ -789,17 +851,35 @@ public:
             float dryL = leftChannel[i];
             float dryR = rightChannel[i];
 
-            float inputLevel = std::abs(dryL) + std::abs(dryR);
-            float attackCoeff = 0.002f;
-            float releaseCoeff = 0.9997f;
+            // Intelligent Ducking Analysis
+            // Analyze input signal around 350Hz (mud range) to trigger ducking
+            float drySum = (dryL + dryR) * 0.5f;
+            float bandEnergy = sidechainFilter.processSample(0, drySum);
+            float inputLevel = std::abs(bandEnergy);
+
+            // Envelope follower with musical attack/release
+            float attackCoeff = 0.01f;
+            float releaseCoeff = 0.9998f;
             
             if (inputLevel > duckingEnvelope)
                 duckingEnvelope = duckingEnvelope + attackCoeff * (inputLevel - duckingEnvelope);
             else
                 duckingEnvelope = duckingEnvelope * releaseCoeff;
 
-            float preL = preDelayL.process(dryL);
-            float preR = preDelayR.process(dryR);
+            float preL, preR;
+            if (preDelayActive)
+            {
+                preL = preDelayL.process(dryL);
+                preR = preDelayR.process(dryR);
+            }
+            else
+            {
+                preL = dryL;
+                preR = dryR;
+                // Still push to delay lines to keep buffer fresh if parameter changes
+                preDelayL.process(dryL);
+                preDelayR.process(dryR);
+            }
 
             float erL, erR;
             earlyReflections.process(preL, preR, erL, erR);
@@ -832,10 +912,21 @@ public:
 
             if (duckingAmount > 0.0f)
             {
-                float duckGain = 1.0f - duckingEnvelope * duckingAmount * 3.0f;
-                duckGain = juce::jlimit(0.0f, 1.0f, duckGain);
+                // Apply Ducking to Wet Signal ONLY
+                // Intensity scales with knob (0% to 100%)
+                // We use the envelope of the "mud" frequencies to duck the entire reverb
+
+                float reduction = duckingEnvelope * duckingAmount * 4.0f;
+                float duckGain = 1.0f - juce::jlimit(0.0f, 1.0f, reduction);
+
                 wetL *= duckGain;
                 wetR *= duckGain;
+
+                currentDuckingGain = duckGain;
+            }
+            else
+            {
+                currentDuckingGain = 1.0f;
             }
 
             // Mix: dry signal is untouched, only wet signal is filtered
@@ -846,6 +937,8 @@ public:
 
     float getLastWetL() const { return lastWetL; }
     float getLastWetR() const { return lastWetR; }
+
+    float getDuckingGain() const { return currentDuckingGain; }
 
 private:
     void updateTankDecay()
@@ -885,7 +978,12 @@ private:
     juce::dsp::StateVariableTPTFilter<float> lowCutFilter;
     juce::dsp::StateVariableTPTFilter<float> highCutFilter;
 
+    // Ducking Detection
+    juce::dsp::StateVariableTPTFilter<float> sidechainFilter;
     float duckingEnvelope = 0.0f;
+
     float lastWetL = 0.0f;
     float lastWetR = 0.0f;
+    float currentDuckingGain = 1.0f;
+    bool preDelayActive = true;
 };

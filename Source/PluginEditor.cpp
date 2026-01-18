@@ -293,11 +293,20 @@ SirenXKnob::SirenXKnob(const juce::String& labelText, const juce::String& suffix
     valueLabel.setColour(juce::Label::textColourId, SirenXColors::textBright);
     addAndMakeVisible(valueLabel);
     
-    slider.onValueChange = [this]()
+    slider.onValueChange = [this]() { forceUpdateLabel(); };
+}
+
+void SirenXKnob::forceUpdateLabel()
+{
+    double value = slider.getValue();
+    juce::String text;
+
+    if (customValueText)
     {
-        juce::String text;
-        double value = slider.getValue();
-        
+        text = customValueText(value);
+    }
+    else
+    {
         if (value >= 1000.0)
             text = juce::String(value / 1000.0, 2) + "k";
         else if (value >= 100.0)
@@ -309,9 +318,9 @@ SirenXKnob::SirenXKnob(const juce::String& labelText, const juce::String& suffix
         
         if (suffixText.isNotEmpty())
             text += " " + suffixText;
-        
-        valueLabel.setText(text, juce::dontSendNotification);
-    };
+    }
+
+    valueLabel.setText(text, juce::dontSendNotification);
 }
 
 void SirenXKnob::setPalette(const SirenXPalette& palette)
@@ -339,6 +348,62 @@ void SirenXKnob::resized()
 }
 
 //==============================================================================
+// Ducking Meter Implementation
+//==============================================================================
+void DuckingMeter::setGainReduction(float gain)
+{
+    if (std::abs(gain - currentGain) > 0.001f)
+    {
+        currentGain = gain;
+        repaint();
+    }
+}
+
+void DuckingMeter::setPalette(const SirenXPalette& palette)
+{
+    currentPalette = palette;
+    repaint();
+}
+
+void DuckingMeter::paint(juce::Graphics& g)
+{
+    auto bounds = getLocalBounds().toFloat();
+
+    // Semi-transparent background for overlay style
+    g.setColour(currentPalette.backgroundDark.withAlpha(0.6f));
+    g.fillRoundedRectangle(bounds, 3.0f);
+
+    // Meter Area
+    auto meterArea = bounds.reduced(3.0f, 3.0f);
+
+    // Gain Reduction Bar (Top-Down)
+    float height = meterArea.getHeight();
+    float meterHeight = height * (1.0f - currentGain);
+
+    if (meterHeight > 0.5f)
+    {
+        // Gradient for the bar (Blue/Cyan for reduction to match theme)
+        juce::Colour c1 = currentPalette.accentBright.withAlpha(0.9f);
+        juce::Colour c2 = currentPalette.accentMid.withAlpha(0.9f);
+
+        juce::ColourGradient grad(c1, meterArea.getX(), meterArea.getY(),
+                                  c2, meterArea.getX(), meterArea.getBottom(), false);
+        g.setGradientFill(grad);
+        g.fillRoundedRectangle(meterArea.getX(), meterArea.getY(), meterArea.getWidth(), meterHeight, 2.0f);
+    }
+
+    // Border
+    g.setColour(currentPalette.metalBlue.withAlpha(0.5f));
+    g.drawRoundedRectangle(bounds, 3.0f, 1.0f);
+
+    // Label "RR" (Reverb Reduction)
+    g.setColour(currentPalette.textDim.withAlpha(0.8f));
+    g.setFont(10.0f);
+    g.drawText("RR", bounds.removeFromBottom(12), juce::Justification::centred);
+}
+
+
+//==============================================================================
 // Main Editor Implementation
 //==============================================================================
 SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
@@ -357,6 +422,18 @@ SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
     addAndMakeVisible(highPassKnob);
     addAndMakeVisible(lowPassKnob);
     addAndMakeVisible(duckingKnob);
+    addAndMakeVisible(duckingMeter);
+
+    decayKnob.customValueText = [this](double value) -> juce::String {
+        float multiplier = 1.0f;
+        auto character = audioProcessor.getCharacter();
+        if (character == SirenXAudioProcessor::ReverbCharacter::Plate)
+            multiplier = 0.95f;
+        else if (character == SirenXAudioProcessor::ReverbCharacter::Vintage)
+            multiplier = 1.05f;
+
+        return juce::String(value * multiplier, 2) + " s";
+    };
 
     // Character buttons setup
     auto setupCharacterButton = [this](juce::TextButton& button, const juce::String& tooltip) {
@@ -418,7 +495,7 @@ SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
     duckingAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, "ducking", duckingKnob.getSlider());
     
-    decayKnob.getSlider().setTooltip("Controls reverb tail length (0.1s - 30s)");
+    decayKnob.getSlider().setTooltip("Controls reverb tail length (0.1s - 10s)");
     preDelayKnob.getSlider().setTooltip("Initial delay before reverb (0 - 500ms)");
     sizeKnob.getSlider().setTooltip("Room size / density of reflections");
     mixKnob.getSlider().setTooltip("Dry/Wet blend");
@@ -428,12 +505,154 @@ SirenXAudioProcessorEditor::SirenXAudioProcessorEditor(SirenXAudioProcessor& p)
     duckingKnob.getSlider().setTooltip("Reduces reverb when input signal is present");
     tooltipToggle.setTooltip("Toggle tooltips on/off");
 
+    // duckingMeter is a custom Component, but base Component has setTooltip.
+    // However, sometimes it requires explicit namespace or access if something is weird.
+    // The previous error was "no member named setTooltip".
+    // It's possible DuckingMeter inherits privately? No, it says public.
+    // Let's verify DuckingMeter definition in .h again.
+    // "class DuckingMeter : public juce::Component"
+    // Maybe the compiler is confused.
+    // I will try removing this line for now as it's just a tooltip on a visualizer.
+    // Or I can cast it. static_cast<juce::Component*>(&duckingMeter)->setTooltip(...)
+
+    // Removing it for safety to fix build.
+    // duckingMeter.setTooltip("Gain Reduction Amount");
+
+    // Presets
+    initPresets();
+    presetCombo.setTextWhenNothingSelected("Select Preset");
+    presetCombo.setJustificationType(juce::Justification::centredLeft);
+
+    // Style the combo box
+    presetCombo.setColour(juce::ComboBox::backgroundColourId, SirenXColors::backgroundDark);
+    presetCombo.setColour(juce::ComboBox::outlineColourId, SirenXColors::metalBlue);
+    presetCombo.setColour(juce::ComboBox::textColourId, SirenXColors::textBright);
+    presetCombo.setColour(juce::ComboBox::arrowColourId, SirenXColors::accentBright);
+
+    juce::String currentCategory;
+    int id = 1;
+    for (const auto& preset : presets)
+    {
+        if (preset.category != currentCategory)
+        {
+            currentCategory = preset.category;
+            presetCombo.addSectionHeading(currentCategory);
+        }
+        presetCombo.addItem(preset.name, id++);
+    }
+
+    presetCombo.onChange = [this] { loadPreset(presetCombo.getSelectedId() - 1); };
+    addAndMakeVisible(presetCombo);
+
     // Initialize character button states
     updateCharacterButtons();
 
+    // Force update labels to ensure defaults are displayed
+    decayKnob.forceUpdateLabel();
+    preDelayKnob.forceUpdateLabel();
+    sizeKnob.forceUpdateLabel();
+    mixKnob.forceUpdateLabel();
+    widthKnob.forceUpdateLabel();
+    highPassKnob.forceUpdateLabel();
+    lowPassKnob.forceUpdateLabel();
+    duckingKnob.forceUpdateLabel();
+
     setSize(750, 560); // Slightly taller to fit buttons
 
-    startTimerHz(10);
+    startTimerHz(24); // Faster timer for smoother meter
+}
+
+void SirenXAudioProcessorEditor::initPresets()
+{
+    // Small Spaces
+    presets.push_back({ "Vocal Booth", "Small", "Tight, dry space perfect for voiceovers or intimate vocals.", 0.4f, 0.0f, 15.0f, 30.0f, 80.0f, 16000.0f, 80.0f, 0.0f, 2 });
+    presets.push_back({ "Drum Room", "Small", "Punchy room with fast decay, great for adding body to drums.", 0.6f, 10.0f, 25.0f, 40.0f, 100.0f, 14000.0f, 40.0f, 0.0f, 2 });
+    presets.push_back({ "Small Studio", "Small", "Natural sounding studio room for general instrument tracking.", 0.8f, 15.0f, 30.0f, 35.0f, 100.0f, 12000.0f, 50.0f, 0.0f, 2 });
+    presets.push_back({ "Tiled Room", "Small", "Bright, reflective space with hard surfaces.", 0.5f, 5.0f, 20.0f, 25.0f, 90.0f, 18000.0f, 100.0f, 0.0f, 0 });
+    presets.push_back({ "Percussion Box", "Small", "Short, dense decay to tighten up percussion loops.", 0.3f, 0.0f, 10.0f, 45.0f, 70.0f, 15000.0f, 150.0f, 0.0f, 2 });
+    presets.push_back({ "Closet", "Small", "Very dead, dry space. Good for 'in your face' sounds.", 0.2f, 0.0f, 5.0f, 20.0f, 50.0f, 8000.0f, 200.0f, 0.0f, 1 });
+    presets.push_back({ "Bright Chamber", "Small", "Exciting, splashy chamber for adding presence.", 0.9f, 20.0f, 35.0f, 30.0f, 110.0f, 16000.0f, 60.0f, 0.0f, 0 });
+    presets.push_back({ "Snare Plate", "Small", "Classic plate vibe tuned for snare crack and sizzle.", 1.2f, 0.0f, 40.0f, 35.0f, 100.0f, 15000.0f, 120.0f, 0.0f, 0 });
+    presets.push_back({ "Guitar Room", "Small", "Warm room ambience tailored for acoustic guitars.", 0.7f, 12.0f, 28.0f, 25.0f, 95.0f, 10000.0f, 80.0f, 0.0f, 1 });
+    presets.push_back({ "Ambience", "Small", "Subtle glue for a mix without obvious reverb tails.", 0.5f, 30.0f, 40.0f, 20.0f, 120.0f, 13000.0f, 100.0f, 0.0f, 2 });
+
+    // Medium Spaces
+    presets.push_back({ "Medium Hall", "Medium", "Standard concert hall, balanced for orchestral or band mixes.", 1.8f, 25.0f, 50.0f, 40.0f, 100.0f, 10000.0f, 60.0f, 0.0f, 2 });
+    presets.push_back({ "Vintage Plate", "Medium", "Warm, modulated plate inspired by 70s hardware.", 2.0f, 10.0f, 55.0f, 35.0f, 100.0f, 14000.0f, 150.0f, 0.0f, 0 });
+    presets.push_back({ "Large Studio", "Medium", "Spacious live room for recording ensembles.", 1.5f, 20.0f, 45.0f, 30.0f, 100.0f, 12000.0f, 50.0f, 0.0f, 2 });
+    presets.push_back({ "Club", "Medium", "Darker, intimate venue feel with some early reflection character.", 1.4f, 15.0f, 40.0f, 35.0f, 90.0f, 8000.0f, 100.0f, 10.0f, 1 });
+    presets.push_back({ "Garage", "Medium", "Raw, unpolished space with flutter echoes.", 1.2f, 5.0f, 35.0f, 25.0f, 110.0f, 15000.0f, 80.0f, 0.0f, 2 });
+    presets.push_back({ "Stage", "Medium", "Simulates being on a wooden stage in a medium theater.", 2.2f, 35.0f, 60.0f, 40.0f, 120.0f, 11000.0f, 70.0f, 0.0f, 2 });
+    presets.push_back({ "Stone Room", "Medium", "Bright, diffusive room with hard stone walls.", 1.6f, 18.0f, 48.0f, 30.0f, 100.0f, 16000.0f, 90.0f, 0.0f, 2 });
+    presets.push_back({ "Warm Hall", "Medium", "Lush, rolled-off top end for a cozy atmosphere.", 2.4f, 40.0f, 65.0f, 45.0f, 100.0f, 7000.0f, 120.0f, 0.0f, 1 });
+    presets.push_back({ "Bright Plate", "Medium", "Shimmering plate with extended high frequencies.", 1.9f, 0.0f, 50.0f, 40.0f, 100.0f, 18000.0f, 200.0f, 0.0f, 0 });
+    presets.push_back({ "Recital Room", "Medium", "Clean, transparent space for solo instruments.", 1.7f, 22.0f, 55.0f, 35.0f, 110.0f, 13000.0f, 60.0f, 0.0f, 2 });
+
+    // Large Spaces
+    presets.push_back({ "Concert Hall", "Large", "Expansive hall for epic cinematic sounds.", 3.5f, 45.0f, 80.0f, 50.0f, 120.0f, 9000.0f, 40.0f, 0.0f, 2 });
+    presets.push_back({ "Cathedral", "Large", "Huge, rolling decay with long pre-delay.", 5.0f, 60.0f, 95.0f, 45.0f, 130.0f, 6000.0f, 30.0f, 0.0f, 1 });
+    presets.push_back({ "Large Church", "Large", "Traditional stone church acoustics.", 4.2f, 50.0f, 85.0f, 40.0f, 115.0f, 8000.0f, 50.0f, 0.0f, 1 });
+    presets.push_back({ "Arena", "Large", "Massive, diffuse sound typical of sports arenas.", 6.0f, 80.0f, 100.0f, 55.0f, 140.0f, 7000.0f, 40.0f, 20.0f, 2 });
+    presets.push_back({ "Cave", "Large", "Dark, resonant space with irregular reflections.", 4.5f, 30.0f, 90.0f, 50.0f, 100.0f, 5000.0f, 100.0f, 0.0f, 1 });
+    presets.push_back({ "Warehouse", "Large", "Industrial space with hard, slapping reflections.", 3.0f, 25.0f, 75.0f, 35.0f, 110.0f, 10000.0f, 60.0f, 0.0f, 2 });
+    presets.push_back({ "Stadium", "Large", "Outdoor stadium slapback and wash.", 5.5f, 100.0f, 100.0f, 45.0f, 150.0f, 8500.0f, 40.0f, 15.0f, 2 });
+    presets.push_back({ "Grand Hall", "Large", "Premium classical music venue simulation.", 3.8f, 55.0f, 82.0f, 50.0f, 120.0f, 9500.0f, 45.0f, 0.0f, 2 });
+    presets.push_back({ "Big Plate", "Large", "Oversized mechanical plate with huge sustain.", 3.2f, 15.0f, 70.0f, 40.0f, 110.0f, 12000.0f, 100.0f, 0.0f, 0 });
+    presets.push_back({ "Canyon", "Large", "Wide, multi-tap delay like reflections in a canyon.", 4.8f, 120.0f, 95.0f, 40.0f, 160.0f, 11000.0f, 80.0f, 0.0f, 2 });
+
+    // Extreme Spaces
+    presets.push_back({ "Infinite Void", "Extreme", "Endless decay for ambient textures.", 9.5f, 50.0f, 100.0f, 100.0f, 180.0f, 15000.0f, 20.0f, 0.0f, 2 });
+    presets.push_back({ "Deep Space", "Extreme", "Dark, modulated drone space.", 10.0f, 200.0f, 100.0f, 60.0f, 200.0f, 4000.0f, 20.0f, 30.0f, 2 });
+    presets.push_back({ "Alien Texture", "Extreme", "Strange, resonant metallic texture.", 8.0f, 10.0f, 90.0f, 80.0f, 150.0f, 20000.0f, 500.0f, 50.0f, 0 });
+    presets.push_back({ "Frozen", "Extreme", "Icy, bright shimmer reverb.", 9.0f, 0.0f, 100.0f, 70.0f, 100.0f, 20000.0f, 20.0f, 0.0f, 0 });
+    presets.push_back({ "Underwater", "Extreme", "Muffled, fluid sound with heavy modulation.", 4.0f, 40.0f, 80.0f, 100.0f, 80.0f, 1000.0f, 20.0f, 0.0f, 1 });
+    presets.push_back({ "Ducking Wash", "Extreme", "Huge reverb that ducks heavily out of the way.", 5.0f, 20.0f, 90.0f, 100.0f, 140.0f, 12000.0f, 50.0f, 80.0f, 2 });
+    presets.push_back({ "Reverse Gated", "Extreme", "Simulated reverse reverb effect.", 0.5f, 0.0f, 60.0f, 100.0f, 100.0f, 10000.0f, 100.0f, 90.0f, 0 });
+    presets.push_back({ "Metallic Drone", "Extreme", "Singing resonances for sound design.", 7.0f, 5.0f, 95.0f, 50.0f, 50.0f, 18000.0f, 300.0f, 0.0f, 0 });
+    presets.push_back({ "Ethereal Shimmer", "Extreme", "Bright, angelic tails.", 8.5f, 100.0f, 100.0f, 60.0f, 160.0f, 16000.0f, 150.0f, 0.0f, 0 });
+    presets.push_back({ "Black Hole", "Extreme", "Gravity-defying, heavy bass reverb.", 10.0f, 500.0f, 100.0f, 100.0f, 200.0f, 3000.0f, 20.0f, 0.0f, 1 });
+}
+
+void SirenXAudioProcessorEditor::loadPreset(int index)
+{
+    if (index >= 0 && index < static_cast<int>(presets.size()))
+    {
+        const auto& p = presets[static_cast<size_t>(index)];
+
+        auto& apvts = audioProcessor.getAPVTS();
+
+        // Update tooltip to show description
+        presetCombo.setTooltip(p.description);
+
+        // Parameter changes must be done on the message thread or via parameter attachment mechanisms
+        // Since we are on the message thread (UI), we can set parameters directly but better to use the attachments?
+        // Attachments update the parameter when the slider moves.
+        // If we move the slider, the attachment updates the parameter.
+
+        decayKnob.getSlider().setValue(p.decay, juce::sendNotificationSync);
+        preDelayKnob.getSlider().setValue(p.preDelay, juce::sendNotificationSync);
+        sizeKnob.getSlider().setValue(p.size, juce::sendNotificationSync);
+        mixKnob.getSlider().setValue(p.mix, juce::sendNotificationSync);
+        widthKnob.getSlider().setValue(p.width, juce::sendNotificationSync);
+        highPassKnob.getSlider().setValue(p.lowCut, juce::sendNotificationSync); // Label is High Pass, param is lowCut
+        lowPassKnob.getSlider().setValue(p.highCut, juce::sendNotificationSync); // Label is Low Pass, param is highCut
+        duckingKnob.getSlider().setValue(p.ducking, juce::sendNotificationSync);
+
+        // Character buttons are handled by UI update, but we need to set the param
+        if (auto* param = apvts.getParameter("character"))
+        {
+            float normVal = static_cast<float>(p.character) / 2.0f;
+            // We can't set parameter directly easily without normalization, but let's assume range 0-2 maps to 0.0-1.0
+            // Actually choice parameter: 0, 1, 2. Normalized: 0.0, 0.5, 1.0
+            param->setValueNotifyingHost(normVal);
+
+            // Also explicitly update the buttons
+            audioProcessor.setCharacter(static_cast<SirenXAudioProcessor::ReverbCharacter>(p.character));
+            updateCharacterButtons();
+        }
+
+        decayKnob.forceUpdateLabel(); // Update time based on character
+    }
 }
 
 SirenXAudioProcessorEditor::~SirenXAudioProcessorEditor()
@@ -446,6 +665,9 @@ void SirenXAudioProcessorEditor::timerCallback()
 {
     // Update character button states periodically in case parameter changed externally
     updateCharacterButtons();
+
+    // Update ducking meter
+    duckingMeter.setGainReduction(audioProcessor.getDuckingGain());
 }
 
 void SirenXAudioProcessorEditor::updateCharacterButtons()
@@ -473,6 +695,8 @@ void SirenXAudioProcessorEditor::updateCharacterButtons()
     plateButton.repaint();
     vintageButton.repaint();
     modernButton.repaint();
+
+    decayKnob.forceUpdateLabel();
 }
 
 //==============================================================================
@@ -508,9 +732,141 @@ void SirenXAudioProcessorEditor::drawBackground(juce::Graphics& g)
         g.drawLine(x, y, x + len, y + random.nextFloat() * 2.0f - 1.0f, 0.5f);
     }
 
+    // Draw Neon Grid Lines
+    auto controlsArea = bounds;
+    // Remove header (50), footer (35), rails (30 each), margins (15, 10)
+    controlsArea.removeFromTop(50);
+    controlsArea.removeFromBottom(35);
+    controlsArea.removeFromLeft(30);
+    controlsArea.removeFromRight(30);
+    controlsArea.reduce(15, 10);
+
+    // Spectrum takes 170 + 20 gap
+    controlsArea.removeFromTop(190);
+
+    // Now we are at the top of the knob rows
+    float rowHeight = 85.0f;
+    float rowGap = 15.0f;
+    float horizontalLineY = controlsArea.getY() + rowHeight + rowGap * 0.5f;
+
+    // Horizontal Line
+    juce::Colour hColorCenter = palette.accentBright.withAlpha(0.6f);
+    juce::Colour hColorEdge = palette.accentMid.withAlpha(0.0f);
+
+    juce::ColourGradient hGrad(hColorCenter, controlsArea.getCentreX(), horizontalLineY,
+                               hColorEdge, controlsArea.getX(), horizontalLineY, true);
+    hGrad.addColour(0.0, hColorCenter);
+    hGrad.addColour(1.0, hColorEdge);
+
+    g.setGradientFill(hGrad);
+    g.fillRect(controlsArea.getX(), horizontalLineY - 1.0f, controlsArea.getWidth(), 2.0f);
+
+    // Vertical Lines
+    float colWidth = controlsArea.getWidth() / 4.0f;
+    float verticalLineTop = controlsArea.getY();
+    float verticalLineBottom = controlsArea.getY() + rowHeight * 2.0f + rowGap;
+
+    juce::Colour vColorCenter = palette.accentMid.withAlpha(0.5f);
+    juce::Colour vColorEdge = palette.accentMid.withAlpha(0.0f);
+
+    for (int i = 1; i <= 3; ++i)
+    {
+        float x = controlsArea.getX() + colWidth * i;
+
+        juce::ColourGradient vGrad(vColorCenter, x, (verticalLineTop + verticalLineBottom) * 0.5f,
+                                   vColorEdge, x, verticalLineTop, true);
+        vGrad.addColour(0.0, vColorCenter);
+        vGrad.addColour(1.0, vColorEdge);
+
+        g.setGradientFill(vGrad);
+        g.fillRect(x - 1.0f, verticalLineTop, 2.0f, verticalLineBottom - verticalLineTop);
+    }
+
+    // Draw North Star at the intersection
+    drawNorthStar(g, controlsArea.getCentreX(), horizontalLineY, 24.0f);
+
     drawSideRails(g);
     drawHeader(g);
     drawFooter(g);
+}
+
+void SirenXAudioProcessorEditor::drawNorthStar(juce::Graphics& g, float x, float y, float size)
+{
+    // Soft yellow color palette
+    juce::Colour centerColor = juce::Colours::white;
+    juce::Colour coreColor = juce::Colour(0xFFFFFFA0); // Light yellow
+    juce::Colour rayColor = juce::Colour(0xFFFFD700);  // Gold
+    juce::Colour glowColor = juce::Colours::orange.withAlpha(0.3f);
+
+    // 1. Central Glow
+    {
+        juce::ColourGradient glowGrad(coreColor.withAlpha(0.6f), x, y,
+                                      glowColor.withAlpha(0.0f), x, y - size * 1.5f, true);
+        g.setGradientFill(glowGrad);
+        g.fillEllipse(x - size, y - size, size * 2.0f, size * 2.0f);
+    }
+
+    // 2. Main Rays (Cardinal)
+    // We draw them as long diamonds for 3D effect
+    auto drawRay = [&](float angle, float length, float width)
+    {
+        juce::Path ray;
+        ray.startNewSubPath(x, y);
+
+        // Create a diamond shape for the ray
+        // Project points based on angle
+        float tipX = x + std::cos(angle) * length;
+        float tipY = y + std::sin(angle) * length;
+
+        float perpAngle = angle + juce::MathConstants<float>::halfPi;
+        float sideX1 = x + std::cos(perpAngle) * width;
+        float sideY1 = y + std::sin(perpAngle) * width;
+        float sideX2 = x - std::cos(perpAngle) * width;
+        float sideY2 = y - std::sin(perpAngle) * width;
+
+        ray.startNewSubPath(sideX1, sideY1);
+        ray.lineTo(tipX, tipY);
+        ray.lineTo(sideX2, sideY2);
+        ray.lineTo(x, y); // Back to center (but center is covered by core)
+        ray.closeSubPath();
+
+        juce::ColourGradient rayGrad(centerColor, x, y,
+                                     rayColor.withAlpha(0.0f), tipX, tipY, false);
+        g.setGradientFill(rayGrad);
+        g.fillPath(ray);
+    };
+
+    float mainLen = size * 1.8f;
+    float mainWidth = size * 0.25f;
+
+    drawRay(0.0f, mainLen, mainWidth); // Right
+    drawRay(juce::MathConstants<float>::pi, mainLen, mainWidth); // Left
+    drawRay(juce::MathConstants<float>::halfPi, mainLen, mainWidth); // Down
+    drawRay(-juce::MathConstants<float>::halfPi, mainLen, mainWidth); // Up
+
+    // 3. Diagonal Rays
+    float diagLen = size * 0.9f;
+    float diagWidth = size * 0.15f;
+    float quarterPi = juce::MathConstants<float>::pi * 0.25f;
+
+    drawRay(quarterPi, diagLen, diagWidth);
+    drawRay(quarterPi * 3.0f, diagLen, diagWidth);
+    drawRay(quarterPi * 5.0f, diagLen, diagWidth);
+    drawRay(quarterPi * 7.0f, diagLen, diagWidth);
+
+    // 4. Central Core (3D Diamond/Gem)
+    float coreSize = size * 0.35f;
+    juce::Path core;
+    core.addStar(juce::Point<float>(x, y), 4, coreSize * 0.5f, coreSize);
+
+    juce::ColourGradient coreGrad(centerColor, x - coreSize * 0.2f, y - coreSize * 0.2f,
+                                  rayColor, x + coreSize * 0.2f, y + coreSize * 0.2f, true);
+    g.setGradientFill(coreGrad);
+    g.fillPath(core);
+
+    // Highlight on core
+    g.setColour(juce::Colours::white.withAlpha(0.8f));
+    g.fillEllipse(x - coreSize * 0.2f, y - coreSize * 0.2f, coreSize * 0.3f, coreSize * 0.3f);
 }
 
 void SirenXAudioProcessorEditor::drawHeader(juce::Graphics& g)
@@ -665,7 +1021,18 @@ void SirenXAudioProcessorEditor::resized()
     auto bounds = getLocalBounds();
     auto headerBounds = bounds.removeFromTop(50);
 
-    tooltipToggle.setBounds(headerBounds.removeFromLeft(120).withTrimmedLeft(35).reduced(0, 15).withWidth(80));
+    // Layout Hints and Presets
+    int railWidth = 30;
+    int margin = 5;
+    int headerButtonWidth = 160;
+    int headerButtonHeight = 24;
+    int headerButtonY = headerBounds.getY() + (headerBounds.getHeight() - headerButtonHeight) / 2;
+
+    // Hints button on the left, flush with rail + margin
+    tooltipToggle.setBounds(railWidth + margin, headerButtonY, headerButtonWidth, headerButtonHeight);
+
+    // Preset Combo on the right, flush with rail + margin
+    presetCombo.setBounds(getWidth() - railWidth - margin - headerButtonWidth, headerButtonY, headerButtonWidth, headerButtonHeight);
 
     if (getWidth() > 0 && getHeight() > 0)
     {
@@ -702,6 +1069,11 @@ void SirenXAudioProcessorEditor::resized()
     highPassKnob.setBounds(row2.removeFromLeft(knobWidth));
     lowPassKnob.setBounds(row2.removeFromLeft(knobWidth));
     duckingKnob.setBounds(row2.removeFromLeft(knobWidth));
+
+    // Place Ducking Meter in top-right of Spectrum Display
+    auto spectrumBounds = spectrumDisplay->getBounds();
+    duckingMeter.setBounds(spectrumBounds.getRight() - 25, spectrumBounds.getY() + 10,
+                           15, 100);
 
     // Character buttons row
     mainControls.removeFromTop(15);
